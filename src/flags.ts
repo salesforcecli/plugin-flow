@@ -9,7 +9,7 @@ import { Messages } from '@salesforce/core';
 import { Flags } from '@salesforce/sf-plugins-core';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('flow_temp', 'flags');
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'flags');
 
 export const resultFormatFlag = Flags.string({
   deprecateAliases: true,

@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { LogService } from '@salesforce/flowtest';;
+import { LogService } from '@salesforce/flows';;
 import {
   Flags,
   loglevel,
@@ -15,7 +15,7 @@ import { Messages } from '@salesforce/core';
 import { colorLogs } from '../../../logColorize.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('flow_temp', 'gettest');
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');
 
 export type LogGetResult = Array<{ log: string } | string>;
 

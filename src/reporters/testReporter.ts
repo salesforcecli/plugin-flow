@@ -14,7 +14,7 @@ import {
   TestResult,
   TestRunIdResult,
   TestService,
-} from '@salesforce/flowtest';
+} from '@salesforce/flows';
 import { Ux } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
@@ -23,7 +23,7 @@ import { JsonReporter, RunResult } from './jsonReporter.js';
 const FAILURE_EXIT_CODE = 100;
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('flow_temp', 'runtest');
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'runtest');
 
 export class TestReporter {
   /**

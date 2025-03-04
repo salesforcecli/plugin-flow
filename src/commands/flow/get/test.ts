@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { TestService } from '@salesforce/flowtest';
+import { TestService } from '@salesforce/flows';
 import {
   Flags,
   loglevel,
@@ -17,7 +17,7 @@ import { RunResult, TestReporter } from '../../../reporters/index.js';
 import { codeCoverageFlag, resultFormatFlag } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('flow_temp', 'gettest');
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');
 export default class Test extends SfCommand<RunResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
@@ -59,7 +59,7 @@ export default class Test extends SfCommand<RunResult> {
     const { flags } = await this.parse(Test);
 
     const conn = flags['target-org'].getConnection(flags['api-version']) as any;
-    
+
     const testService = new TestService(conn);
     const result = await testService.reportAsyncResults(flags['test-run-id'], flags['code-coverage']);
 
