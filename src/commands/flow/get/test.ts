@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { TestService } from '@salesforce/flowtest';
+import { TestService } from '@salesforce/flows';
 import {
   Flags,
   loglevel,
@@ -14,10 +14,10 @@ import {
 } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { RunResult, TestReporter } from '../../../reporters/index.js';
-import { codeCoverageFlag, resultFormatFlag } from '../../../flags.js';
+import { codeCoverageFlag, resultFormatFlag, outputDirectory, concise } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('flow_temp', 'gettest');
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');
 export default class Test extends SfCommand<RunResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
@@ -43,16 +43,9 @@ export default class Test extends SfCommand<RunResult> {
       summary: messages.getMessage('flags.detailed-coverage.summary'),
       dependsOn: ['code-coverage'],
     }),
-    'output-dir': Flags.directory({
-      aliases: ['outputdir', 'output-directory'],
-      deprecateAliases: true,
-      char: 'd',
-      summary: messages.getMessage('flags.output-dir.summary'),
-    }),
+    'output-dir': outputDirectory,
     'result-format': resultFormatFlag,
-    concise: Flags.boolean({
-      summary: messages.getMessage('flags.concise.summary'),
-    }),
+    'concise': concise
   };
 
   public async run(): Promise<RunResult> {

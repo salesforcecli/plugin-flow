@@ -9,7 +9,8 @@ import { Messages } from '@salesforce/core';
 import { Flags } from '@salesforce/sf-plugins-core';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
-const messages = Messages.loadMessages('flow_temp', 'flags');
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'flags');
+export const TestLevelValues = ['RunLocalTests', 'RunAllTestsInOrg', 'RunSpecifiedTests'];
 
 export const resultFormatFlag = Flags.string({
   deprecateAliases: true,
@@ -26,3 +27,29 @@ export const codeCoverageFlag = Flags.boolean({
   char: 'c',
   summary: messages.getMessage('flags.code-coverage.summary'),
 });
+
+export const outputDirectory = Flags.directory({
+  aliases: ['outputdir', 'output-directory'],
+  deprecateAliases: true,
+  char: 'd',
+  summary: messages.getMessage('flags.output-dir.summary'),
+});
+
+export const concise = Flags.boolean({
+  summary: messages.getMessage('flags.concise.summary'),
+});
+
+export const synchronous = Flags.boolean({
+  char: 'y',
+  summary: messages.getMessage('flags.synchronous.summary'),
+});
+
+export const testLevelFlag = Flags.string({
+  deprecateAliases: true,
+  aliases: ['testlevel'],
+  char: 'l',
+  summary: messages.getMessage('flags.test-level.summary'),
+  description: messages.getMessage('flags.test-level.description'),
+  options: TestLevelValues,
+});
+

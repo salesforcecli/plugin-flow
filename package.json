@@ -5,7 +5,7 @@
   "dependencies": {
     "@oclif/core": "^4",
     "@salesforce/core": "^8",
-    "@salesforce/flowtest": "^8.1.19",
+    "@salesforce/flows": "^8.1.19",
     "@salesforce/sf-plugins-core": "^12"
   },
   "devDependencies": {

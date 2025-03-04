@@ -1,14 +1,13 @@
 import { CancellationTokenSource, TestLevel, TestResult, TestService, TestRunIdResult } from '@salesforce/flows';
-import { SfCommand, Flags, loglevel, arrayWithDeprecation, Ux,} from '@salesforce/sf-plugins-core';
+import { SfCommand, Flags, arrayWithDeprecation, Ux,} from '@salesforce/sf-plugins-core';
 import { Messages, SfError } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
 import { RunResult, TestReporter} from '../../../reporters/index.js';
+import {resultFormatFlag, codeCoverageFlag, outputDirectory, concise, synchronous,testLevelFlag } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url)
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'flow.run.test');
-export const TestLevelValues = ['RunLocalTests', 'RunAllTestsInOrg', 'RunSpecifiedTests'];
 
-// xport type FlowRunTestResult = Array<{ Name: string; Id: string }>;
 export type FlowRunTestResult = RunResult | TestRunIdResult;
 const exclusiveTestSpecifiers = ['class-names', 'suite-names', 'tests'];
 
@@ -17,28 +16,18 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
+  public static readonly deprecateAliases = true;
+  public static readonly aliases = ['force:flow:test:run'];
 
   public static readonly flags = {
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
-    loglevel ,
-    'result-format': Flags.string({
-      deprecateAliases: true,
-      aliases: ['resultformat'],
-      char: 'r',
-      summary: messages.getMessage('flags.result-format.summary'),
-      options: ['human', 'tap', 'junit', 'json'] as const,
-      default: 'human'
-    }),
-    'concise': Flags.boolean({
-      summary: messages.getMessage('flags.concise.summary'),
-    }),
-    'output-dir': Flags.directory({
-      aliases: ['outputdir', 'output-directory'],
-      deprecateAliases: true,
-      char: 'd',
-      summary: messages.getMessage('flags.output-dir.summary'),
-    }),
+    'result-format': resultFormatFlag,
+    'concise': concise,
+    'output-dir': outputDirectory,
+    'code-coverage': codeCoverageFlag,
+    'synchronous': synchronous,
+    'test-level': testLevelFlag,
     'class-names': arrayWithDeprecation({
       deprecateAliases: true,
       aliases: ['classnames'],
@@ -46,20 +35,6 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       summary: messages.getMessage('flags.class-names.summary'),
       description: messages.getMessage('flags.class-names.description'),
       exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'class-names'),
-    }),
-    'code-coverage': Flags.boolean({
-      aliases: ['codecoverage'],
-      deprecateAliases: true,
-      char: 'c',
-      summary: messages.getMessage('flags.code-coverage.summary'),
-    }),
-    'test-level': Flags.string({
-      deprecateAliases: true,
-      aliases: ['testlevel'],
-      char: 'l',
-      summary: messages.getMessage('flags.test-level.summary'),
-      description: messages.getMessage('flags.test-level.description'),
-      options: TestLevelValues,
     }),
     'suite-names': arrayWithDeprecation({
       deprecateAliases: true,
@@ -74,10 +49,6 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       summary: messages.getMessage('flags.tests.summary'),
       description: messages.getMessage('flags.tests.description'),
       exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'tests'),
-    }),
-    synchronous: Flags.boolean({
-      char: 'y',
-      summary: messages.getMessage('flags.synchronous.summary'),
     }),
   };
   protected cancellationTokenSource = new CancellationTokenSource();
@@ -122,13 +93,12 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       return testReporter.report(result, flags);
     } else {
       // Tests were ran asynchronously or the --wait timed out.
-      // Log the proper 'apex get test' command for the user to run later
+      // Log the proper 'flow get test' command for the user to run later
       this.log(messages.getMessage('runTestReportCommand', [this.config.bin, result.testRunId, conn.getUsername()]));
       this.info(messages.getMessage('runTestSyncInstructions'));
 
       if (flags['output-dir']) {
         // testService writes a file with just the test run id in it to test-run-id.txt
-        // github.com/forcedotcom/salesforcedx-apex/blob/c986abfabee3edf12f396f1d2e43720988fa3911/src/tests/testService.ts#L245-L246
         await testService.writeResultFiles(result, { dirPath: flags['output-dir'] }, flags['code-coverage']);
       }
 

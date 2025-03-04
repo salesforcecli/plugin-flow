@@ -15,26 +15,12 @@ describe('flow run test', () => {
     $$.restore();
   });
 
-  it('runs hello', async () => {
+  it('runs flow test', async () => {
     await FlowRunTest.run([]);
     const output = sfCommandStubs.log
       .getCalls()
       .flatMap((c) => c.args)
       .join('\n');
-    expect(output).to.include('hello world');
-  });
-
-  it('runs hello with --json and no provided name', async () => {
-    const result = await FlowRunTest.run([]);
-    expect(result.path).to.equal('src/commands/flow/run/test.ts');
-  });
-
-  it('runs hello world --name Astro', async () => {
-    await FlowRunTest.run(['--name', 'Astro']);
-    const output = sfCommandStubs.log
-      .getCalls()
-      .flatMap((c) => c.args)
-      .join('\n');
-    expect(output).to.include('hello Astro');
+    expect(output).to.include('tbd');
   });
 });
