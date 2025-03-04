@@ -56,7 +56,7 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
   public async run(): Promise<FlowRunTestResult> {
     // parse the provided flags
     const { flags } = await this.parse(FlowRunTest);
-    
+
     const testLevel = await validateFlags(
       flags['class-names'],
       flags['suite-names'],
@@ -125,7 +125,7 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       this.cancellationTokenSource.token
     ) as Promise<TestResult>;
   }
-  
+
   private async runTestAsynchronous(
     testService: TestService,
     flags: {
@@ -149,7 +149,7 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       )),
       skipCodeCoverage: !flags['code-coverage'],
     };
-  
+
       // cast as TestRunIdResult because we're building an async payload which will return an async result
     return (await testService.runTestAsynchronous(
       payload,
@@ -159,7 +159,7 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       this.cancellationTokenSource.token,
       flags.wait
     )) as TestRunIdResult;
-  }    
+  }
 }
 
 const validateFlags = async (

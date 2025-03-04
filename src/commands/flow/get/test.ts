@@ -52,7 +52,7 @@ export default class Test extends SfCommand<RunResult> {
     const { flags } = await this.parse(Test);
 
     const conn = flags['target-org'].getConnection(flags['api-version']) as any;
-    
+
     const testService = new TestService(conn);
     const result = await testService.reportAsyncResults(flags['test-run-id'], flags['code-coverage']);
 

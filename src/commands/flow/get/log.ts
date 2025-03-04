@@ -5,7 +5,11 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
+<<<<<<< HEAD
 import { LogService } from '@salesforce/flows'
+=======
+import { LogService } from '@salesforce/flows';;
+>>>>>>> 1427ce5d9a225b1090f258ed09c1bb487429193b
 import {
   Flags,
   loglevel,
