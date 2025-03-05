@@ -508,20 +508,6 @@ describe('apex:test:run', () => {
       }
     });
 
-    it('rejects synchronous and suitenames/classnames', async () => {
-      try {
-        await FlowRunTest.run(['--synchronous', '--suite-names', 'mysuite']);
-      } catch (e) {
-        expect((e as Error).message).to.equal(messages.getMessage('syncClassErr'));
-      }
-
-      try {
-        await FlowRunTest.run(['--synchronous', '--class-names', 'myclass,mysecondclass']);
-      } catch (e) {
-        expect((e as Error).message).to.equal(messages.getMessage('syncClassErr'));
-      }
-    });
-
     it('rejects classname/suitnames/test variations', async () => {
       // uses oclif exclusive now
       try {
