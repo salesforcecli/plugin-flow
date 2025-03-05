@@ -16,7 +16,7 @@ import {
   TestService,
 } from '@salesforce/flows';
 import { Ux } from '@salesforce/sf-plugins-core';
-import { Messages } from '@salesforce/core';
+import { Connection, Messages } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
 import { JsonReporter, RunResult } from './jsonReporter.js';
 
@@ -32,7 +32,7 @@ export class TestReporter {
    * @param ux a new Ux instance based on if the command is in json mode
    * @param connection a connection to the org the tests are being run against - used for getting username for hints
    */
-  public constructor(private readonly ux: Ux, private readonly connection: any) {}
+  public constructor(private readonly ux: Ux, private readonly connection: Connection) {}
 
   public async report(
     result: TestResult,

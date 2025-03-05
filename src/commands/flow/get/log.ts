@@ -4,19 +4,14 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-
-<<<<<<< HEAD
-import { LogService } from '@salesforce/flows'
-=======
-import { LogService } from '@salesforce/flows';;
->>>>>>> 1427ce5d9a225b1090f258ed09c1bb487429193b
+import { LogService } from '@salesforce/flows';
 import {
   Flags,
-  loglevel,
   SfCommand,
 } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { colorLogs } from '../../../logColorize.js';
+import {outputDirectoryFlag, numberFlag, logIdFlag } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');
@@ -33,36 +28,14 @@ export default class Log extends SfCommand<LogGetResult> {
   public static readonly flags = {
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
-    loglevel,
-    'log-id': Flags.salesforceId({
-      deprecateAliases: true,
-      aliases: ['logid'],
-      char: 'i',
-      summary: messages.getMessage('flags.log-id.summary'),
-      startsWith: '07L',
-      length: 'both',
-    }),
-    // Removed default because it will take priority over 'log-id' in the apex library
-    // https://github.com/forcedotcom/salesforcedx-apex/blob/main/src/logs/logService.ts#L57-L60
-    // eslint-disable-next-line sf-plugin/flag-min-max-default
-    number: Flags.integer({
-      char: 'n',
-      min: 1,
-      max: 25,
-      summary: messages.getMessage('flags.number.summary'),
-    }),
-    'output-dir': Flags.directory({
-      aliases: ['outputdir', 'output-directory'],
-      deprecateAliases: true,
-      char: 'd',
-      summary: messages.getMessage('flags.output-dir.summary'),
-      description: messages.getMessage('flags.output-dir.description'),
-    }),
+    'log-id': logIdFlag,
+    number: numberFlag,
+    'output-dir': outputDirectoryFlag,
   };
 
   public async run(): Promise<LogGetResult> {
     const { flags } = await this.parse(Log);
-    const conn = flags['target-org'].getConnection(flags['api-version']) as any;
+    const conn = flags['target-org'].getConnection(flags['api-version']);
     const logService = new LogService(conn);
 
     const logResults = await logService.getLogs({

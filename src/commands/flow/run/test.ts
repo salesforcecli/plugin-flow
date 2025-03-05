@@ -1,16 +1,24 @@
 import { CancellationTokenSource, TestLevel, TestResult, TestService, TestRunIdResult } from '@salesforce/flows';
-import { SfCommand, Flags, arrayWithDeprecation, Ux,} from '@salesforce/sf-plugins-core';
+import { SfCommand, Flags, Ux } from '@salesforce/sf-plugins-core';
 import { Messages, SfError } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
-import { RunResult, TestReporter} from '../../../reporters/index.js';
-import {resultFormatFlag, codeCoverageFlag, outputDirectory, concise, synchronous,testLevelFlag } from '../../../flags.js';
+import { RunResult, TestReporter } from '../../../reporters/index.js';
+import {
+  resultFormatFlag,
+  codeCoverageFlag,
+  outputDirectoryFlag,
+  conciseFlag,
+  synchronousFlag,
+  testLevelFlag,
+  classNamesFlag,
+  suiteNamesFlag,
+  testsFlag
+} from '../../../flags.js';
 
-Messages.importMessagesDirectoryFromMetaUrl(import.meta.url)
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'flow.run.test');
 
 export type FlowRunTestResult = RunResult | TestRunIdResult;
-const exclusiveTestSpecifiers = ['class-names', 'suite-names', 'tests'];
-
 
 export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
   public static readonly summary = messages.getMessage('summary');
@@ -23,33 +31,14 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
     'result-format': resultFormatFlag,
-    'concise': concise,
-    'output-dir': outputDirectory,
+    concise: conciseFlag,
+    'output-dir': outputDirectoryFlag,
     'code-coverage': codeCoverageFlag,
-    'synchronous': synchronous,
+    synchronous: synchronousFlag,
     'test-level': testLevelFlag,
-    'class-names': arrayWithDeprecation({
-      deprecateAliases: true,
-      aliases: ['classnames'],
-      char: 'n',
-      summary: messages.getMessage('flags.class-names.summary'),
-      description: messages.getMessage('flags.class-names.description'),
-      exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'class-names'),
-    }),
-    'suite-names': arrayWithDeprecation({
-      deprecateAliases: true,
-      aliases: ['suitenames'],
-      char: 's',
-      summary: messages.getMessage('flags.suite-names.summary'),
-      description: messages.getMessage('flags.suite-names.description'),
-      exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'suite-names'),
-    }),
-    tests: arrayWithDeprecation({
-      char: 't',
-      summary: messages.getMessage('flags.tests.summary'),
-      description: messages.getMessage('flags.tests.description'),
-      exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'tests'),
-    }),
+    'class-names': classNamesFlag,
+    'suite-names': suiteNamesFlag,
+    tests: testsFlag,
   };
   protected cancellationTokenSource = new CancellationTokenSource();
 
@@ -150,7 +139,7 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
       skipCodeCoverage: !flags['code-coverage'],
     };
 
-      // cast as TestRunIdResult because we're building an async payload which will return an async result
+    // cast as TestRunIdResult because we're building an async payload which will return an async result
     return (await testService.runTestAsynchronous(
       payload,
       flags['code-coverage'],

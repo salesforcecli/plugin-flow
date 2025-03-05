@@ -8,13 +8,12 @@
 import { TestService } from '@salesforce/flows';
 import {
   Flags,
-  loglevel,
   SfCommand,
   Ux,
 } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { RunResult, TestReporter } from '../../../reporters/index.js';
-import { codeCoverageFlag, resultFormatFlag, outputDirectory, concise } from '../../../flags.js';
+import { codeCoverageFlag, resultFormatFlag, outputDirectoryFlag, conciseFlag, testRunIdFlag, detailedCoverageSummaryFlag } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');
@@ -23,35 +22,23 @@ export default class Test extends SfCommand<RunResult> {
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
   public static readonly deprecateAliases = true;
-  public static readonly aliases = ['force:apex:test:report'];
+  public static readonly aliases = ['force:flow:test:report'];
 
   public static readonly flags = {
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
-    loglevel,
-    'test-run-id': Flags.salesforceId({
-      deprecateAliases: true,
-      aliases: ['testrunid'],
-      char: 'i',
-      summary: messages.getMessage('flags.test-run-id.summary'),
-      required: true,
-      startsWith: '707',
-      length: 'both',
-    }),
+    'test-run-id': testRunIdFlag,
     'code-coverage': codeCoverageFlag,
-    'detailed-coverage': Flags.boolean({
-      summary: messages.getMessage('flags.detailed-coverage.summary'),
-      dependsOn: ['code-coverage'],
-    }),
-    'output-dir': outputDirectory,
+    'detailed-coverage': detailedCoverageSummaryFlag,
+    'output-dir': outputDirectoryFlag,
     'result-format': resultFormatFlag,
-    'concise': concise
+    'concise': conciseFlag
   };
 
   public async run(): Promise<RunResult> {
     const { flags } = await this.parse(Test);
 
-    const conn = flags['target-org'].getConnection(flags['api-version']) as any;
+    const conn = flags['target-org'].getConnection(flags['api-version']);
 
     const testService = new TestService(conn);
     const result = await testService.reportAsyncResults(flags['test-run-id'], flags['code-coverage']);

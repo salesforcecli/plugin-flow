@@ -26,37 +26,9 @@ To see code coverage results, use the --code-coverage flag with --result-format.
 
   <%= config.bin %> <%= command.id %> --test-run-id <test run id> --code-coverage --output-dir <path to outputdir> --target-org me@myorg'
 
-# flags.test-run-id.summary
-
-ID of the test run.
-
-# flags.output-dir.summary
-
-Directory in which to store test result files.
-
 # apexLibErr
 
 Unknown error in Apex Library: %s
-
-# flags.detailed-coverage.summary
-
-Display detailed code coverage per test.
-
-# flags.log-id.summary
-
-ID of the specific log to display.
-
-# flags.number.summary
-
-Number of the most recent logs to display.
-
-# flags.output-dir.summary
-
-Directory for saving the log files.
-
-# flags.output-dir.description
-
-The location can be an absolute path or relative to the current working directory. The default is the current directory.
 
 # noResultsFound
 
