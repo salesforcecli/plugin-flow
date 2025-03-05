@@ -123,31 +123,31 @@ export class TestReporter {
     };
 
     if ('summary' in result) {
-      jsonOutput = jsonOutput as RunResult;
+      const jsonOutputValue = jsonOutput as RunResult;
 
       if (typeof resultFormat !== 'undefined' || synchronous) {
         outputDirConfig.fileInfos = [
           {
             filename: result.summary.testRunId ? `test-result-${result.summary.testRunId}.json` : 'test-result.json',
-            content: jsonOutput,
+            content: jsonOutputValue,
           },
-          ...(jsonOutput.coverage
+          ...(jsonOutputValue.coverage
             ? [
                 {
                   filename: 'test-result-codecoverage.json',
-                  content: jsonOutput.coverage?.coverage,
+                  content: jsonOutputValue.coverage?.coverage,
                 },
               ]
             : []),
         ];
         outputDirConfig.resultFormats = [ResultFormat.junit];
       }
-
+      let resultFormatValue = resultFormat;
       if (typeof resultFormat === 'undefined' && synchronous) {
-        resultFormat = ResultFormat.human;
+        resultFormatValue = ResultFormat.human;
       }
 
-      switch (resultFormat) {
+      switch (resultFormatValue) {
         case ResultFormat.tap:
           outputDirConfig.fileInfos?.push({
             filename: 'test-result.txt',
