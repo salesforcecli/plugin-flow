@@ -1252,7 +1252,7 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
-"@jsforce/jsforce-node@^3.6.3", "@jsforce/jsforce-node@^3.6.5", "@jsforce/jsforce-node@^3.6.6":
+"@jsforce/jsforce-node@^3.6.3", "@jsforce/jsforce-node@^3.6.5":
   version "3.6.6"
   resolved "https://registry.yarnpkg.com/@jsforce/jsforce-node/-/jsforce-node-3.6.6.tgz#26fe2fc9f4f3671ca8bfb0c98a728cb8a0219265"
   integrity sha512-WdIo2lLbrz6nkfiaz2UynyaNiM8o+fEjaRev7zA4KKSaQYB1MJ66xHubeI5Iheq8WgkY9XGwWKAwPDhuV+GROQ==
@@ -1495,20 +1495,6 @@
     typedoc-plugin-missing-exports "^3.0.0"
     typescript "^5.5.4"
     wireit "^0.14.5"
-
-"@salesforce/flows@file:../../salesforcedx/salesforcedx-flowtest":
-  version "1.0.0"
-  dependencies:
-    "@jsforce/jsforce-node" "^3.6.6"
-    "@salesforce/core" "^8.8.4"
-    "@salesforce/kit" "^3.2.3"
-    "@types/istanbul-reports" "^3.0.4"
-    bfj "8.0.0"
-    fast-glob "^3.3.3"
-    faye "1.4.0"
-    istanbul-lib-coverage "^3.2.2"
-    istanbul-lib-report "^3.0.1"
-    istanbul-reports "^3.1.7"
 
 "@salesforce/kit@^3.2.2", "@salesforce/kit@^3.2.3":
   version "3.2.3"
