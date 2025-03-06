@@ -5,15 +5,18 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { TestService } from '@salesforce/flows';
-import {
-  Flags,
-  SfCommand,
-  Ux,
-} from '@salesforce/sf-plugins-core';
+import { TestService } from '@salesforce/apex-node';
+import { Flags, SfCommand, Ux } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { RunResult, TestReporter } from '../../../reporters/index.js';
-import { codeCoverageFlag, resultFormatFlag, outputDirectoryFlag, conciseFlag, testRunIdFlag, detailedCoverageSummaryFlag } from '../../../flags.js';
+import {
+  codeCoverageFlag,
+  resultFormatFlag,
+  outputDirectoryFlag,
+  conciseFlag,
+  testRunIdFlag,
+  detailedCoverageSummaryFlag,
+} from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');
@@ -32,7 +35,7 @@ export default class Test extends SfCommand<RunResult> {
     'detailed-coverage': detailedCoverageSummaryFlag,
     'output-dir': outputDirectoryFlag,
     'result-format': resultFormatFlag,
-    'concise': conciseFlag
+    concise: conciseFlag,
   };
 
   public async run(): Promise<RunResult> {

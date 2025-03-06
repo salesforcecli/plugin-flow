@@ -1,4 +1,4 @@
-import { CancellationTokenSource, TestLevel, TestResult, TestService, TestRunIdResult } from '@salesforce/flows';
+import { CancellationTokenSource, TestLevel, TestResult, TestService, TestRunIdResult } from '@salesforce/apex-node';
 import { SfCommand, Flags, Ux } from '@salesforce/sf-plugins-core';
 import { Messages, SfError } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';
@@ -12,7 +12,7 @@ import {
   testLevelFlag,
   classNamesFlag,
   suiteNamesFlag,
-  testsFlag
+  testsFlag,
 } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);

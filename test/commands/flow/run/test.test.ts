@@ -9,7 +9,7 @@ import { Messages, Org } from '@salesforce/core';
 import sinon from 'sinon';
 import { Ux, stubSfCommandUx } from '@salesforce/sf-plugins-core';
 import { assert, expect } from 'chai';
-import { TestService } from '@salesforce/flows';
+import { TestService } from '@salesforce/apex-node';
 import FlowRunTest from '../../../../src/commands/flow/run/test.js';
 
 import {

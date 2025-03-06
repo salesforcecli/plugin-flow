@@ -14,7 +14,7 @@ import {
   TestResult,
   TestRunIdResult,
   TestService,
-} from '@salesforce/flows';
+} from '@salesforce/apex-node';
 import { Ux } from '@salesforce/sf-plugins-core';
 import { Connection, Messages } from '@salesforce/core';
 import { Duration } from '@salesforce/kit';

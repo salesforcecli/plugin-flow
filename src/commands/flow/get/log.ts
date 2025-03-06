@@ -4,14 +4,11 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { LogService } from '@salesforce/flows';
-import {
-  Flags,
-  SfCommand,
-} from '@salesforce/sf-plugins-core';
+import { LogService } from '@salesforce/apex-node';
+import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { Messages } from '@salesforce/core';
 import { colorLogs } from '../../../logColorize.js';
-import {outputDirectoryFlag, numberFlag, logIdFlag } from '../../../flags.js';
+import { outputDirectoryFlag, numberFlag, logIdFlag } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'gettest');

@@ -5,7 +5,7 @@
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
 
-import { ApexTestResultOutcome, ApexTestRunResultStatus, TestResult } from '@salesforce/flows';
+import { ApexTestResultOutcome, ApexTestRunResultStatus, TestResult } from '@salesforce/apex-node';
 import { RunResult } from '../src/reporters/index.js';
 
 // TODO: these should be typed, once the types have been updated in a major bump

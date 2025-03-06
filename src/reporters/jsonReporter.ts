@@ -4,7 +4,7 @@
  * Licensed under the BSD 3-Clause license.
  * For full license text, see LICENSE.txt file in the repo root or https://opensource.org/licenses/BSD-3-Clause
  */
-import { ApexTestResultOutcome, TestResult, ApexTestRunResultStatus } from '@salesforce/flows';
+import { ApexTestResultOutcome, TestResult, ApexTestRunResultStatus } from '@salesforce/apex-node';
 
 export type RunResult = {
   summary: Summary;
