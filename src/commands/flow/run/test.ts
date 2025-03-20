@@ -45,6 +45,10 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
   public async run(): Promise<FlowRunTestResult> {
     // parse the provided flags
     const { flags } = await this.parse(FlowRunTest);
+    const classNames = flags['class-names'];
+    if (classNames?.length && classNames.length >= 1 && classNames?.some((name) => !name.startsWith('flowtesting.'))) {
+      return Promise.reject(new Error(messages.getMessage('invalidFlowClassErr')));
+    }
 
     const testLevel = await validateFlags(
       flags['class-names'],
@@ -134,7 +138,8 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
         testLevel,
         flags.tests?.join(','),
         flags['class-names']?.join(','),
-        flags['suite-names']?.join(',')
+        flags['suite-names']?.join(','),
+        'flow'
       )),
       skipCodeCoverage: !flags['code-coverage'],
     };
@@ -161,7 +166,6 @@ const validateFlags = async (
   if (synchronous && (Boolean(suiteNames) || (classNames?.length && classNames.length > 1))) {
     return Promise.reject(new Error(messages.getMessage('syncClassErr')));
   }
-
   if (
     (Boolean(tests) || Boolean(classNames) || suiteNames) &&
     testLevel &&

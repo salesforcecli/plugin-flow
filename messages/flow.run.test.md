@@ -49,3 +49,7 @@ Synchronous test runs can include test methods from only one Apex class. Omit th
 # testLevelErr
 
 When specifying classnames, suitenames, or tests, indicate RunSpecifiedTests as the testlevel
+
+# invalidFlowClassErr
+
+class name must starts with flowtesting namespace
