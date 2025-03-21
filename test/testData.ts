@@ -33,11 +33,11 @@ export const testRunWithFailuresResult = {
     {
       ApexClass: {
         Id: '01pxx00000NWwb3AAD',
-        Name: 'MyApexTests',
+        Name: 'MyFlowTests',
         NamespacePrefix: null,
       },
       AsyncApexJobId: '707xx0000AUS2gHQQT',
-      FullName: 'MyApexTests.testConfig',
+      FullName: 'MyFlowTests.testConfig',
       Id: '07Mxx00000ErgiHUAR',
       Message: null,
       MethodName: 'testConfig',
@@ -72,11 +72,11 @@ export const testRunSimpleResult: RunResult = {
     {
       ApexClass: {
         Id: '01pxx00000NWwb3AAD',
-        Name: 'MyApexTests',
+        Name: 'MyFlowTests',
         NamespacePrefix: '',
       },
       AsyncApexJobId: '707xx0000AUS2gHQQT',
-      FullName: 'MyApexTests.testConfig',
+      FullName: 'MyFlowTests.testConfig',
       Id: '07Mxx00000ErgiHUAR',
       Message: '',
       MethodName: 'testConfig',
@@ -120,13 +120,13 @@ export const testRunSimple: TestResult = {
       apexLogId: null,
       apexClass: {
         id: '01pxx00000NWwb3AAD',
-        name: 'MyApexTests',
+        name: 'MyFlowTests',
         namespacePrefix: '',
-        fullName: 'MyApexTests',
+        fullName: 'MyFlowTests',
       },
       runTime: 53,
       testTimestamp: '2020-08-25T00:48:02.000+0000',
-      fullName: 'MyApexTests.testConfig',
+      fullName: 'MyFlowTests.testConfig',
     },
   ],
 };
@@ -168,14 +168,14 @@ export const runWithCoverage: TestResult = {
       apexLogId: null,
       apexClass: {
         id: '01pxx00000NWwb3AAD',
-        name: 'MyApexTests',
+        name: 'MyFlowTests',
         // @ts-expect-error for types to change in next major
         namespacePrefix: null,
-        fullName: 'MyApexTests',
+        fullName: 'MyFlowTests',
       },
       runTime: 53,
       testTimestamp: '2020-08-25T00:48:02.000+0000',
-      fullName: 'MyApexTests.testConfig',
+      fullName: 'MyFlowTests.testConfig',
       perClassCoverage: [
         {
           apexTestClassId: '01pxx00000NnP2KQAV',
@@ -236,14 +236,14 @@ export const runWithFailures: TestResult = {
       apexLogId: null,
       apexClass: {
         id: '01pxx00000NWwb3AAD',
-        name: 'MyApexTests',
+        name: 'MyFlowTests',
         // @ts-expect-error for types to change in next major
         namespacePrefix: null,
-        fullName: 'MyApexTests',
+        fullName: 'MyFlowTests',
       },
       runTime: 53,
       testTimestamp: '2020-08-25T00:48:02.000+0000',
-      fullName: 'MyApexTests.testConfig',
+      fullName: 'MyFlowTests.testConfig',
     },
   ],
 };
@@ -280,16 +280,16 @@ export const runWithMixed: TestResult = {
       apexLogId: null,
       apexClass: {
         id: '01pxx00000NWwb3AAD',
-        name: 'MyApexTests',
+        name: 'MyFlowTests',
         // @ts-expect-error for types to change in next major
         namespacePrefix: null,
-        fullName: 'MyApexTests',
+        fullName: 'MyFlowTests',
       },
 
       // @ts-expect-error for types to change in next major
       runTime: null,
       testTimestamp: '2020-08-25T00:48:02.000+0000',
-      fullName: 'MyApexTests.testConfig',
+      fullName: 'MyFlowTests.testConfig',
     },
   ],
 };
@@ -326,12 +326,12 @@ export const mixedResult: RunResult = {
       Outcome: ApexTestResultOutcome.Skip,
       ApexClass: {
         Id: '01pxx00000NWwb3AAD',
-        Name: 'MyApexTests', // @ts-expect-error for types to change in next major
+        Name: 'MyFlowTests', // @ts-expect-error for types to change in next major
         NamespacePrefix: null,
       },
       // @ts-expect-error for types to change in next major
       RunTime: null,
-      FullName: 'MyApexTests.testConfig',
+      FullName: 'MyFlowTests.testConfig',
     },
   ],
 };
@@ -366,11 +366,11 @@ export const failureResult = {
       Outcome: 'Fail',
       ApexClass: {
         Id: '01pxx00000NWwb3AAD',
-        Name: 'MyApexTests',
+        Name: 'MyFlowTests',
         NamespacePrefix: null,
       },
       RunTime: 53,
-      FullName: 'MyApexTests.testConfig',
+      FullName: 'MyFlowTests.testConfig',
     },
   ],
 };
@@ -467,11 +467,11 @@ export const jsonResult: RunResult = {
       Outcome: ApexTestResultOutcome.Pass,
       ApexClass: {
         Id: '01pxx00000NWwb3AAD',
-        Name: 'MyApexTests',
+        Name: 'MyFlowTests',
         NamespacePrefix: '',
       },
       RunTime: 53,
-      FullName: 'MyApexTests.testConfig',
+      FullName: 'MyFlowTests.testConfig',
     },
   ],
 };
@@ -502,7 +502,7 @@ export const jsonWithCoverage: RunResult = {
         },
         ApexTestClass: {
           Id: '07Mxx00000ErgiHUAR',
-          Name: 'MyApexTests',
+          Name: 'MyFlowTests',
         },
         Coverage: {
           coveredLines: [1],
@@ -545,11 +545,11 @@ export const jsonWithCoverage: RunResult = {
     {
       ApexClass: {
         Id: '01pxx00000NWwb3AAD',
-        Name: 'MyApexTests', // @ts-expect-error for types to change in next major
+        Name: 'MyFlowTests', // @ts-expect-error for types to change in next major
         NamespacePrefix: null,
       },
       AsyncApexJobId: '707xx0000AUS2gHQQT',
-      FullName: 'MyApexTests.testConfig',
+      FullName: 'MyFlowTests.testConfig',
       Id: '07Mxx00000ErgiHUAR',
       // @ts-expect-error for types to change in next major
       Message: null,
