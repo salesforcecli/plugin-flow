@@ -3,11 +3,11 @@
   "description": "temp plugin for flow test",
   "version": "1.0.0",
   "dependencies": {
-    "@oclif/core": "^4.2.8",
+    "@oclif/core": "^4.2.10",
     "@salesforce/apex-node": "^8.1.19",
-    "@salesforce/core": "^8.8.5",
+    "@salesforce/core": "^8.8.6",
     "@salesforce/kit": "^3.2.3",
-    "@salesforce/sf-plugins-core": "^12.2.0",
+    "@salesforce/sf-plugins-core": "^12.2.1",
     "ansis": "^3.17.0"
   },
   "devDependencies": {
