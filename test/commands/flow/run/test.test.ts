@@ -36,15 +36,13 @@ describe('apex:test:run', () => {
     logStub = sandbox.stub(Ux.prototype, 'log');
     styledJsonStub = sandbox.stub(Ux.prototype, 'styledJSON');
     stubSfCommandUx(sandbox);
-    sandbox
-      .stub(Org, 'create')
+    sandbox.stub(Org, 'create').resolves({
       // @ts-expect-error: Should expect an error
-      .resolves({
-        getConnection: () => ({
-          getUsername: () => 'test@user.com',
-          query: () => Promise.resolve({ records: ['flowtesting'] }),
-        }),
-      });
+      getConnection: () => ({
+        getUsername: () => 'test@user.com',
+        query: () => Promise.resolve({ records: ['flowtesting'] }),
+      }),
+    });
   });
 
   afterEach(() => {
