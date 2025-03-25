@@ -87,9 +87,9 @@ Happy debugging!
 
 <!-- commands -->
 
-- [`sf flow get log`](#sf-apex-get-log)
-- [`sf flow get test`](#sf-apex-get-test)
-- [`sf flow list log`](#sf-apex-list-log)
-- [`sf flow run`](#sf-apex-run)
-- [`sf flow run test`](#sf-apex-run-test)
-- [`sf flow tail log`](#sf-apex-tail-log)
+- [`sf flow get log`](#sf-flow-get-log)
+- [`sf flow get test`](#sf-flow-get-test)
+- [`sf flow list log`](#sf-flow-list-log)
+- [`sf flow run`](#sf-flow-run)
+- [`sf flow run test`](#sf-flow-run-test)
+- [`sf flow tail log`](#sf-flow-tail-log)
