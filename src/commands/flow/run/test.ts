@@ -61,10 +61,6 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
   public async run(): Promise<FlowRunTestResult> {
     // parse the provided flags
     const { flags } = await this.parse(FlowRunTest);
-    const classNames = flags['class-names'];
-    if (classNames?.length && classNames.length >= 1 && classNames?.some((name) => !name.startsWith('flowtesting.'))) {
-      return Promise.reject(new Error(messages.getMessage('invalidFlowClassErr')));
-    }
 
     const testLevel = await validateFlags(
       flags['class-names'],
@@ -125,7 +121,28 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     testLevel: TestLevel
   ): Promise<TestResult> {
     const payload = {
-      ...(await testService.buildSyncPayload(testLevel, flags.tests?.join(','), flags['class-names']?.join(','))),
+      ...(await testService.buildSyncPayload(
+        testLevel,
+        flags.tests
+          ?.map((str) =>
+            str
+              .split(',')
+              .filter((str2) => !!str2)
+              .map((str3) => `flowtesting.${str3.trim()}`)
+              .flat()
+          )
+          .join(','),
+        flags['class-names']
+          ?.map((str) =>
+            str
+              .split(',')
+              .filter((str2) => !!str2)
+              .map((str3) => `flowtesting.${str3.trim()}`)
+              .flat()
+          )
+          .join(','),
+        'flow'
+      )),
       skipCodeCoverage: !flags['code-coverage'],
     };
     return testService.runTestSynchronous(
@@ -152,8 +169,24 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     const payload = {
       ...(await testService.buildAsyncPayload(
         testLevel,
-        flags.tests?.join(','),
-        flags['class-names']?.join(','),
+        flags.tests
+          ?.map((str) =>
+            str
+              .split(',')
+              .filter((str2) => !!str2)
+              .map((str3) => `flowtesting.${str3.trim()}`)
+              .flat()
+          )
+          .join(','),
+        flags['class-names']
+          ?.map((str) =>
+            str
+              .split(',')
+              .filter((str2) => !!str2)
+              .map((str3) => `flowtesting.${str3.trim()}`)
+              .flat()
+          )
+          .join(','),
         flags['suite-names']?.join(','),
         'flow'
       )),

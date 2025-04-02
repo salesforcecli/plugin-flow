@@ -69,12 +69,7 @@ describe('flow:test:run', () => {
     it('should return a success human format message with async', async () => {
       sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(runWithFailures);
 
-      const result = await FlowRunTest.run([
-        '--tests',
-        'flowtesting.MyFlowTests.testConfig',
-        '--result-format',
-        'human',
-      ]);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests.testConfig', '--result-format', 'human']);
       expect(result).to.deep.equal(testRunWithFailuresResult);
       expect(logStub.firstCall.args[0]).to.include('=== Test Summary');
       expect(logStub.firstCall.args[0]).to.include('=== Test Results');
@@ -84,7 +79,7 @@ describe('flow:test:run', () => {
     it('should return a success tap format message with async', async () => {
       sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(runWithFailures);
 
-      const result = await FlowRunTest.run(['--tests', 'flowtesting.MyFlowTests.testConfig', '--result-format', 'tap']);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests.testConfig', '--result-format', 'tap']);
 
       expect(result).to.deep.equal(testRunWithFailuresResult);
       expect(logStub.firstCall.args[0]).to.include('1..1');
@@ -93,12 +88,7 @@ describe('flow:test:run', () => {
 
     it('should return a success junit format message with async', async () => {
       sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(runWithFailures);
-      const result = await FlowRunTest.run([
-        '--tests',
-        'flowtesting.MyFlowTests.testConfig',
-        '--result-format',
-        'junit',
-      ]);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests.testConfig', '--result-format', 'junit']);
       expect(result).to.deep.equal(testRunWithFailuresResult);
       expect(logStub.firstCall.args[0]).to.include('<property name="failRate" value="50%"/>');
       expect(logStub.firstCall.args[0]).to.include('<property name="outcome" value="Failed"/>');
@@ -107,14 +97,14 @@ describe('flow:test:run', () => {
 
     it('should return a success json format message with async', async () => {
       sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(runWithFailures);
-      const result = await FlowRunTest.run(['--tests', 'flowtesting.MyFlowTests', '--result-format', 'json']);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests', '--result-format', 'json']);
       expect(result).to.deep.equal(testRunWithFailuresResult);
       expect(styledJsonStub.firstCall.args[0]).to.deep.equal({ result: testRunWithFailuresResult, status: 100 });
     });
 
     it('should return a success --json format message with async', async () => {
       sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves({ testRunId: '707xx0000AUS2gH' });
-      const result = await FlowRunTest.run(['--tests', 'flowtesting.MyFlowTests', '--json']);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests', '--json']);
       expect(result).to.deep.equal({ testRunId: '707xx0000AUS2gH' });
       expect(styledJsonStub.callCount).to.equal(0);
     });
@@ -122,14 +112,14 @@ describe('flow:test:run', () => {
     it('should return a success --json format message with sync', async () => {
       sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(runWithFailures);
 
-      const result = await FlowRunTest.run(['--tests', 'flowtesting.MyFlowTests', '--json', '--synchronous']);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests', '--json', '--synchronous']);
       expect(result).to.deep.equal(testRunWithFailuresResult);
       expect(styledJsonStub.callCount).to.equal(0);
     });
 
     it('should return a success human format with synchronous', async () => {
       sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(runWithFailures);
-      await FlowRunTest.run(['--tests', 'flowtesting.MyFlowTests', '--result-format', 'human', '--synchronous']);
+      await FlowRunTest.run(['--tests', 'MyFlowTests', '--result-format', 'human', '--synchronous']);
       expect(logStub.firstCall.args[0]).to.contain('Test Summary');
       expect(logStub.firstCall.args[0]).to.contain('Test Results');
       expect(logStub.firstCall.args[0]).to.not.contain('Code Coverage by Class');
@@ -137,14 +127,7 @@ describe('flow:test:run', () => {
 
     it('should only display failed test with human format with concise flag', async () => {
       sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(runWithFailureAndSuccess);
-      await FlowRunTest.run([
-        '--tests',
-        'flowtesting.MyFlowTests',
-        '--result-format',
-        'human',
-        '--synchronous',
-        '--concise',
-      ]);
+      await FlowRunTest.run(['--tests', 'MyFlowTests', '--result-format', 'human', '--synchronous', '--concise']);
       expect(logStub.firstCall.args[0]).to.contain('Test Summary');
       expect(logStub.firstCall.args[0]).to.contain('Test Results');
       expect(logStub.firstCall.args[0]).to.contain('MyFailingTest');
@@ -157,7 +140,7 @@ describe('flow:test:run', () => {
       const runTestSynchronousSpy = sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(runWithFailures);
       await FlowRunTest.run([
         '--class-names',
-        'flowtesting.myFlow',
+        'MyFlowTests',
         '--synchronous',
         '--code-coverage',
         '--result-format',
@@ -167,13 +150,18 @@ describe('flow:test:run', () => {
       ]);
       expect(buildPayloadSpy.calledOnce).to.be.true;
       expect(runTestSynchronousSpy.calledOnce).to.be.true;
-      expect(buildPayloadSpy.firstCall.args).to.deep.equal(['RunSpecifiedTests', undefined, 'flowtesting.myFlow']);
+      expect(buildPayloadSpy.firstCall.args).to.deep.equal([
+        'RunSpecifiedTests',
+        undefined,
+        'flowtesting.MyFlowTests',
+        FLOW_CATEGORY,
+      ]);
       expect(runTestSynchronousSpy.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: false,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -186,7 +174,7 @@ describe('flow:test:run', () => {
         .resolves(runWithCoverage);
       await FlowRunTest.run([
         '--class-names',
-        'flowtesting.myFlow',
+        'MyFlowTests',
         '--code-coverage',
         '--result-format',
         'human',
@@ -198,7 +186,7 @@ describe('flow:test:run', () => {
       expect(buildPayloadSpy.firstCall.args).to.deep.equal([
         'RunSpecifiedTests',
         undefined,
-        'flowtesting.myFlow',
+        'flowtesting.MyFlowTests',
         undefined,
         FLOW_CATEGORY,
       ]);
@@ -207,7 +195,7 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -219,13 +207,13 @@ describe('flow:test:run', () => {
       const runTestSynchronousSpy = sandbox
         .stub(TestService.prototype, 'runTestAsynchronous')
         .resolves(runWithFailures);
-      await FlowRunTest.run(['--class-names', 'flowtesting.myFlow', '--test-level', 'RunSpecifiedTests']);
+      await FlowRunTest.run(['--class-names', 'MyFlowTests', '--test-level', 'RunSpecifiedTests']);
       expect(buildPayloadSpy.calledOnce).to.be.true;
       expect(runTestSynchronousSpy.calledOnce).to.be.true;
       expect(buildPayloadSpy.firstCall.args).to.deep.equal([
         'RunSpecifiedTests',
         undefined,
-        'flowtesting.myFlow',
+        'flowtesting.MyFlowTests',
         undefined,
         FLOW_CATEGORY,
       ]);
@@ -234,7 +222,7 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -244,22 +232,21 @@ describe('flow:test:run', () => {
       sandbox.stub(Org.prototype, 'getUsername').resolves('test@example.com');
       const buildPayloadSpy = sandbox.spy(TestService.prototype, 'buildSyncPayload');
       const runTestSynchronousSpy = sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(runWithFailures);
-      await FlowRunTest.run([
-        '--class-names',
-        'flowtesting.myFlow',
-        '--synchronous',
-        '--test-level',
-        'RunSpecifiedTests',
-      ]);
+      await FlowRunTest.run(['--class-names', 'MyFlowTests', '--synchronous', '--test-level', 'RunSpecifiedTests']);
       expect(buildPayloadSpy.calledOnce).to.be.true;
       expect(runTestSynchronousSpy.calledOnce).to.be.true;
-      expect(buildPayloadSpy.firstCall.args).to.deep.equal(['RunSpecifiedTests', undefined, 'flowtesting.myFlow']);
+      expect(buildPayloadSpy.firstCall.args).to.deep.equal([
+        'RunSpecifiedTests',
+        undefined,
+        'flowtesting.MyFlowTests',
+        FLOW_CATEGORY,
+      ]);
       expect(runTestSynchronousSpy.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -270,12 +257,7 @@ describe('flow:test:run', () => {
     it('should return a success human format message with async', async () => {
       sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
-      const result = await FlowRunTest.run([
-        '--tests',
-        'flowtesting.MyFlowTests.testConfig',
-        '--result-format',
-        'human',
-      ]);
+      const result = await FlowRunTest.run(['--tests', 'MyFlowTests.testConfig', '--result-format', 'human']);
 
       expect(result).to.deep.equal(testRunSimpleResult);
       expect(logStub.firstCall.args[0]).to.include('=== Test Summary');
@@ -287,19 +269,15 @@ describe('flow:test:run', () => {
     it('should parse tests flags correctly comma separated', async () => {
       const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
-      await FlowRunTest.run([
-        '--tests',
-        'flowtesting.MyFlowTests.test1,flowtesting.MyFlowTests.test2',
-        '--result-format',
-        'human',
-      ]);
+      await FlowRunTest.run(['--tests', 'MyFlowTests.test1,MyFlowTests.test2', '--result-format', 'human']);
+      // eslint-disable-next-line no-console
+      console.log(flowStub.firstCall.args[0]);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'MyFlowTests',
-            namespace: 'flowtesting',
+            className: 'flowtesting.MyFlowTests',
             testMethods: ['test1', 'test2'],
           },
         ],
@@ -311,9 +289,9 @@ describe('flow:test:run', () => {
 
       await FlowRunTest.run([
         '--tests',
-        'flowtesting.MyFlowTests.test1',
+        'MyFlowTests.test1',
         '--tests',
-        'flowtesting.MyFlowTests.test2',
+        'MyFlowTests.test2',
         '--result-format',
         'human',
       ]);
@@ -322,8 +300,7 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'MyFlowTests',
-            namespace: 'flowtesting',
+            className: 'flowtesting.MyFlowTests',
             testMethods: ['test1', 'test2'],
           },
         ],
@@ -333,18 +310,13 @@ describe('flow:test:run', () => {
     it('should parse class-names flags correctly comma separated', async () => {
       const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
-      await FlowRunTest.run([
-        '--class-names',
-        'flowtesting.MyFirstTests,flowtesting.MySecondTest',
-        '--result-format',
-        'human',
-      ]);
+      await FlowRunTest.run(['--class-names', 'MyFirstTest,MySecondTest', '--result-format', 'human']);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.MyFirstTests',
+            className: 'flowtesting.MyFirstTest',
           },
           {
             className: 'flowtesting.MySecondTest',
@@ -356,20 +328,13 @@ describe('flow:test:run', () => {
     it('should parse class-names (-n) flags correctly multi-flag', async () => {
       const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
-      await FlowRunTest.run([
-        '-n',
-        'flowtesting.MyFirstTests',
-        '-n',
-        'flowtesting.MySecondTest',
-        '--result-format',
-        'human',
-      ]);
+      await FlowRunTest.run(['-n', 'MyFirstTest', '-n', 'MySecondTest', '--result-format', 'human']);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.MyFirstTests',
+            className: 'flowtesting.MyFirstTest',
           },
           {
             className: 'flowtesting.MySecondTest',
@@ -381,36 +346,24 @@ describe('flow:test:run', () => {
     it('should parse suite-names flags correctly comma separated', async () => {
       const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
-      await FlowRunTest.run([
-        '--suite-names',
-        'flowtesting.MyFlowTest1,flowtesting.MyFlowTest2',
-        '--result-format',
-        'human',
-      ]);
+      await FlowRunTest.run(['--suite-names', 'MyFlowTest1,MyFlowTest2', '--result-format', 'human']);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
         category: FLOW_CATEGORY,
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
-        suiteNames: 'flowtesting.MyFlowTest1,flowtesting.MyFlowTest2',
+        suiteNames: 'MyFlowTest1,MyFlowTest2',
       });
     });
 
     it('should parse suite-names (-s) flags correctly multi-flag', async () => {
       const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
-      await FlowRunTest.run([
-        '-s',
-        'flowtesting.MyFlowTest1',
-        '-s',
-        'flowtesting.MyFlowTest2',
-        '--result-format',
-        'human',
-      ]);
+      await FlowRunTest.run(['-s', 'MyFlowTest1', '-s', 'MyFlowTest2', '--result-format', 'human']);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
         category: FLOW_CATEGORY,
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
-        suiteNames: 'flowtesting.MyFlowTest1,flowtesting.MyFlowTest2',
+        suiteNames: 'MyFlowTest1,MyFlowTest2',
       });
     });
 
@@ -475,7 +428,7 @@ describe('flow:test:run', () => {
       const runTestSynchronousSpy = sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(runWithCoverage);
       await FlowRunTest.run([
         '--class-names',
-        'flowtesting.myFlow',
+        'MyFlowTests',
         '--synchronous',
         '--code-coverage',
         '--result-format',
@@ -485,13 +438,18 @@ describe('flow:test:run', () => {
       ]);
       expect(buildPayloadSpy.calledOnce).to.be.true;
       expect(runTestSynchronousSpy.calledOnce).to.be.true;
-      expect(buildPayloadSpy.firstCall.args).to.deep.equal(['RunSpecifiedTests', undefined, 'flowtesting.myFlow']);
+      expect(buildPayloadSpy.firstCall.args).to.deep.equal([
+        'RunSpecifiedTests',
+        undefined,
+        'flowtesting.MyFlowTests',
+        FLOW_CATEGORY,
+      ]);
       expect(runTestSynchronousSpy.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: false,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -504,7 +462,7 @@ describe('flow:test:run', () => {
         .resolves(runWithCoverage);
       await FlowRunTest.run([
         '--class-names',
-        'flowtesting.myFlow',
+        'MyFlowTests',
         '--code-coverage',
         '--result-format',
         'human',
@@ -516,7 +474,7 @@ describe('flow:test:run', () => {
       expect(buildPayloadSpy.firstCall.args).to.deep.equal([
         'RunSpecifiedTests',
         undefined,
-        'flowtesting.myFlow',
+        'flowtesting.MyFlowTests',
         undefined,
         FLOW_CATEGORY,
       ]);
@@ -525,7 +483,7 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -535,13 +493,13 @@ describe('flow:test:run', () => {
       sandbox.stub(Org.prototype, 'getUsername').resolves('test@example.com');
       const buildPayloadSpy = sandbox.spy(TestService.prototype, 'buildAsyncPayload');
       const runTestSynchronousSpy = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
-      await FlowRunTest.run(['--class-names', 'flowtesting.myFlow', '--test-level', 'RunSpecifiedTests']);
+      await FlowRunTest.run(['--class-names', 'MyFlowTests', '--test-level', 'RunSpecifiedTests']);
       expect(buildPayloadSpy.calledOnce).to.be.true;
       expect(runTestSynchronousSpy.calledOnce).to.be.true;
       expect(buildPayloadSpy.firstCall.args).to.deep.equal([
         'RunSpecifiedTests',
         undefined,
-        'flowtesting.myFlow',
+        'flowtesting.MyFlowTests',
         undefined,
         FLOW_CATEGORY,
       ]);
@@ -550,7 +508,7 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
@@ -560,22 +518,21 @@ describe('flow:test:run', () => {
       sandbox.stub(Org.prototype, 'getUsername').resolves('test@example.com');
       const buildPayloadSpy = sandbox.spy(TestService.prototype, 'buildSyncPayload');
       const runTestSynchronousSpy = sandbox.stub(TestService.prototype, 'runTestSynchronous').resolves(testRunSimple);
-      await FlowRunTest.run([
-        '--class-names',
-        'flowtesting.myFlow',
-        '--synchronous',
-        '--test-level',
-        'RunSpecifiedTests',
-      ]);
+      await FlowRunTest.run(['--class-names', 'MyFlowTests', '--synchronous', '--test-level', 'RunSpecifiedTests']);
       expect(buildPayloadSpy.calledOnce).to.be.true;
       expect(runTestSynchronousSpy.calledOnce).to.be.true;
-      expect(buildPayloadSpy.firstCall.args).to.deep.equal(['RunSpecifiedTests', undefined, 'flowtesting.myFlow']);
+      expect(buildPayloadSpy.firstCall.args).to.deep.equal([
+        'RunSpecifiedTests',
+        undefined,
+        'flowtesting.MyFlowTests',
+        FLOW_CATEGORY,
+      ]);
       expect(runTestSynchronousSpy.firstCall.args[0]).to.deep.equal({
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.myFlow',
+            className: 'flowtesting.MyFlowTests',
           },
         ],
       });
