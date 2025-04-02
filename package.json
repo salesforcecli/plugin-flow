@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/plugin-flow",
   "description": "temp plugin for flow test",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "dependencies": {
     "@oclif/core": "^4.2.10",
     "@salesforce/apex-node": "^8.1.20-qa.1",
