@@ -45,7 +45,7 @@ describe('flow run test', () => {
 
   describe('--result-format', () => {
     it('will print tap format', async () => {
-      const result = execCmd('flow:run:test --result-format tap --wait 10', { ensureExitCode: 0 }).shellOutput.stdout;
+      const result = execCmd('apex:run:test --result-format tap --wait 10', { ensureExitCode: 0 }).shellOutput.stdout;
       // console.log(result);
       expect(result).to.include('1..1');
       expect(result).to.include('ok 1');
