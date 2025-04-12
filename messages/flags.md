@@ -28,6 +28,7 @@ Here's what the levels mean:
 
 - RunLocalTests — All tests in your org are run, except the ones that originate from installed managed and unlocked packages.
 - RunAllTestsInOrg — All tests are run. The tests include all tests in your org, including tests of managed packages.
+- RunSpecifiedTests - Only the tests that you specify with the --tests flag are run.
 
 # flags.class-names.summary
 

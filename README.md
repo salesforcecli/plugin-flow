@@ -86,63 +86,9 @@ Happy debugging!
 # Commands
 
 <!-- commands -->
-* [`sf flow get log`](#sf-flow-get-log)
-* [`sf flow get test`](#sf-flow-get-test)
-* [`sf flow run test`](#sf-flow-run-test)
 
-## `sf flow get log`
-
-Display test results for a specific asynchronous test run.
-
-```
-USAGE
-  $ sf flow get log -o <value> [--json] [--flags-dir <value>] [--api-version <value>] [-i <value>] [-n <value>]
-    [-d <value>]
-
-FLAGS
-  -d, --output-dir=<value>   Directory in which to store test result files.
-  -i, --log-id=<value>       ID of the specific log to display.
-  -n, --number=<value>       Number of the most recent logs to display.
-  -o, --target-org=<value>   (required) Username or alias of the target org. Not required if the `target-org`
-                             configuration variable is already set.
-      --api-version=<value>  Override the api version used for api requests made by this command
-
-GLOBAL FLAGS
-  --flags-dir=<value>  Import flag values from a directory.
-  --json               Format output as json.
-
-DESCRIPTION
-  Display test results for a specific asynchronous test run.
-
-  Provide a test run ID to display test results for an enqueued or completed asynchronous test run. The test run ID is
-  displayed after running the "sf apex test run" command.
-
-  To see code coverage results, use the --code-coverage flag with --result-format. The output displays a high-level
-  summary of the test run and the code coverage values for classes in your org. If you specify human-readable result
-  format, use the --detailed-coverage flag to see detailed coverage results for each test method run.
-
-ALIASES
-  $ sf force apex log get
-
-EXAMPLES
-  Display test results for your default org using a test run ID:
-
-    $ sf flow get log --test-run-id <test run id>
-
-  Similar to previous example, but output the result in JUnit format:
-
-    $ sf flow get log --test-run-id <test run id> --result-format junit
-
-  Also retrieve code coverage results and output in JSON format:
-
-    $ sf flow get log --test-run-id <test run id> --code-coverage --json
-
-  Specify a directory in which to save the test results from the org with the specified username (rather than your
-  default org):
-
-    $ sf flow get log --test-run-id <test run id> --code-coverage --output-dir <path to outputdir> --target-org \
-      me@myorg'
-```
+- [`sf flow get test`](#sf-flow-get-test)
+- [`sf flow run test`](#sf-flow-run-test)
 
 ## `sf flow get test`
 
@@ -277,11 +223,9 @@ FLAG DESCRIPTIONS
     For multiple tests, repeat the flag for each.
     --tests Test1 --tests Test2
 ```
+
 <!-- commandsstop -->
 
-- [`sf flow get log`](#sf-flow-get-log)
 - [`sf flow get test`](#sf-flow-get-test)
-- [`sf flow list log`](#sf-flow-list-log)
 - [`sf flow run`](#sf-flow-run)
 - [`sf flow run test`](#sf-flow-run-test)
-- [`sf flow tail log`](#sf-flow-tail-log)
