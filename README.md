@@ -32,13 +32,12 @@ Link the plugin from the `plugin-flow` package directory and then run your comma
 
 ```
 $ sfdx plugins:link .
-$ sfdx force:flow:log:list -u myOrg@example.com
 ```
 
 Alternatively, you can also run the command from the `plugin-flow` package directory without linking the plugin:
 
 ```
-$ NODE_OPTIONS=--inspect-brk bin/dev force:flow:log:list -u myOrg@example.com
+$ NODE_OPTIONS=--inspect-brk bin/dev force:flow:run:test -u myOrg@example.com
 ```
 
 <br />
@@ -61,13 +60,13 @@ We recommend using the Visual Studio Code (VS Code) IDE for your plugin developm
 1. If you linked your plugin to the Salesforce CLI using `yarn plugin:link`, call your command with the `dev-suspend` switch:
 
 ```
-$ sfdx force:flow:log:list -u myOrg@example.com --dev-suspend
+$ sfdx force:flow:run:test -u myOrg@example.com --dev-suspend
 ```
 
 Alternatively, replace `sfdx` with `NODE_OPTIONS=--inspect-brk bin/dev` and run your command:
 
 ```
-$ NODE_OPTIONS=--inspect-brk bin/dev force:apex:log:list -u myOrg@example.com
+$ NODE_OPTIONS=--inspect-brk bin/dev force:flow:run:test -u myOrg@example.com
 ```
 
 2. Set some breakpoints in your code.
@@ -109,7 +108,7 @@ FLAGS
                                 <options: human|tap|junit|json>
       --api-version=<value>     Override the api version used for api requests made by this command
       --concise                 Display only failed test results; works with human-readable output only.
-      --detailed-coverage       Display detailed code coverage per test.
+      --detailed-coverage       Not available for flow tests.
 
 GLOBAL FLAGS
   --flags-dir=<value>  Import flag values from a directory.
@@ -118,18 +117,18 @@ GLOBAL FLAGS
 DESCRIPTION
   Display test results for a specific asynchronous test run.
 
-  Provide a test run ID to display test results for an enqueued or completed asynchronous test run. The test run ID is
-  displayed after running the "sf apex test run" command.
+  Provide a flow test run ID to display test results for an enqueued or completed asynchronous test run. The test run ID
+  is displayed after running the "sf flow run test" command.
 
   To see code coverage results, use the --code-coverage flag with --result-format. The output displays a high-level
-  summary of the test run and the code coverage values for classes in your org. If you specify human-readable result
+  summary of the test run and the code coverage values for flow tests in your org. If you specify human-readable result
   format, use the --detailed-coverage flag to see detailed coverage results for each test method run.
 
 ALIASES
   $ sf force flow test report
 
 EXAMPLES
-  Display test results for your default org using a test run ID:
+  Display flow test results for your default org using a test run ID:
 
     $ sf flow get test --test-run-id <test run id>
 
@@ -141,16 +140,16 @@ EXAMPLES
 
     $ sf flow get test --test-run-id <test run id> --code-coverage --json
 
-  Specify a directory in which to save the test results from the org with the specified username (rather than your
+  Specify a directory in which to save the test results from the org with the “me@my.org” username (rather than your
   default org):
 
     $ sf flow get test --test-run-id <test run id> --code-coverage --output-dir <path to outputdir> --target-org \
-      me@myorg'
+      me@my.org'
 ```
 
 ## `sf flow run test`
 
-Summary of a command.
+Invoke flow tests in an org.
 
 ```
 USAGE
@@ -163,16 +162,15 @@ FLAGS
   -d, --output-dir=<value>      Directory in which to store test result files.
   -l, --test-level=<option>     Level of tests to run; default is RunLocalTests.
                                 <options: RunLocalTests|RunAllTestsInOrg|RunSpecifiedTests>
-  -n, --class-names=<value>...  Flow test class names to run; default is all classes.
+  -n, --class-names=<value>...  Flow names that contain flow tests to run.
   -o, --target-org=<value>      (required) Username or alias of the target org. Not required if the `target-org`
                                 configuration variable is already set.
   -r, --result-format=<option>  [default: human] Format of the test results.
                                 <options: human|tap|junit|json>
-  -s, --suite-names=<value>...  Flow test suite names to run.
-  -t, --tests=<value>...        Flow test class names or IDs and, if applicable, test methods to run; default is all
-                                tests.
-  -y, --synchronous             Runs test methods from a single Apex class synchronously; if not specified, tests are
-                                run asynchronously.
+  -s, --suite-names=<value>...  Not available for flow tests.
+  -t, --tests=<value>...        Flow test names to run.
+  -y, --synchronous             Run flow tests for one flow synchronously; if not specified, tests are run
+                                asynchronously.
       --api-version=<value>     Override the api version used for api requests made by this command
       --concise                 Display only failed test results; works with human-readable output only.
 
@@ -181,41 +179,65 @@ GLOBAL FLAGS
   --json               Format output as json.
 
 DESCRIPTION
-  Summary of a command.
+  Invoke flow tests in an org.
 
-  More information about a command. Don't repeat the summary.
+  Specify which tests to run by using the --class-names flag followed by the names of the flows you want to test. For
+  example, if you save a flow with the name Flow1, then use: –class-names Flow1.
+
+  To see code coverage results, use the --code-coverage flag with --result-format. The output displays a high-level
+  summary of the test run and the code coverage values for classes in your org. If you specify human-readable result
+  format, use the --detailed-coverage flag to see detailed coverage results for each test method run.
+
+  By default, flow run test runs asynchronously and immediately returns a test run ID. If you use the –synchronous flag,
+  you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the
+  command displays the results. If the tests haven't finished by the end of the wait time, the command displays a test
+  run ID. Use the "sf flow get test --test-run-id" command to get the results.
+
+  You must have the "View All Data" org system permission to use this command. The permission is disabled by default and
+  can be enabled only by a system administrator.
 
 ALIASES
   $ sf force flow test run
 
 EXAMPLES
-  $ sf flow run test
+  Run all local tests in your default org:
+
+    $ sf flow run test --test-level RunLocalTests
+
+  Run all the Flow1 and Flow2 flow tests in the org with alias “scratchOrg”:
+
+    $ sf flow run test —target-org scratchOrg —class-names Flow1 --class-names Flow2
+
+  Run specific Flow1 and Flow2 flow tests in your default org:
+
+    $ sf flow run test --tests Flow1.Test1 --tests Flow2.Test2
+
+  Run all tests synchronously in your default org; the command waits to display the test results until all tests
+  finish:
+
+    $ sf flow run test –synchronous
+
+  Run all local tests in the org with the username “me@my.org”; save the output to the specified directory:
+
+    $ sf flow run test --test-level RunLocalTests --output-dir /Users/susan/temp/cliOutput --target-org me@my.org
 
 FLAG DESCRIPTIONS
   -l, --test-level=RunLocalTests|RunAllTestsInOrg|RunSpecifiedTests  Level of tests to run; default is RunLocalTests.
 
     Here's what the levels mean:
 
-    - RunSpecifiedTests — Only the tests that you specify in the runTests option are run. Code coverage requirements
-    differ from the default coverage requirements when using this test level. The executed tests must cover each class
-    and trigger in the deployment package for a minimum of 75% code coverage. This coverage is computed for each class
-    and triggers individually, and is different than the overall coverage percentage.
-    - RunLocalTests — All local tests in your org, including tests that originate from no-namespaced unlocked packages,
-    are run. The tests that originate from installed managed packages and namespaced unlocked packages aren't run. This
-    test level is the default for production deployments that include Apex classes or triggers.
-    - RunAllTestsInOrg — All tests are run. The tests include all tests in your org.
+    - RunLocalTests — All tests in your org are run, except the ones that originate from installed managed and unlocked
+    packages.
+    - RunAllTestsInOrg — All tests are run. The tests include all tests in your org, including tests of managed
+    packages.
 
-  -n, --class-names=<value>...  Flow test class names to run; default is all classes.
+  -n, --class-names=<value>...  Flow names that contain flow tests to run.
 
-    If you select --class-names, you can't specify --suite-names or --tests.
-    For multiple classes, repeat the flag for each.
-    --class-names Class1 --class-names Class2
+    Default is all flow tests. If you select --class-names, you can't specify --tests.
 
-  -s, --suite-names=<value>...  Flow test suite names to run.
+  -s, --suite-names=<value>...  Not available for flow tests.
 
-    If you select --suite-names, you can't specify --class-names or --tests.
-    For multiple suites, repeat the flag for each.
-    --suite-names Suite1 --suite-names Suite2
+    Not available for flow tests.
 
   -t, --tests=<value>...  Flow test class names or IDs and, if applicable, test methods to run; default is all tests.
 
