@@ -29,6 +29,8 @@ export default class Log extends SfCommand<LogGetResult> {
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
 
+  public static readonly hidden = true;
+
   public static readonly deprecateAliases = true;
   public static readonly aliases = ['force:apex:log:get'];
   public static readonly flags = {
