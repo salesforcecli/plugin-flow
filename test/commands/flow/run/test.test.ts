@@ -266,24 +266,6 @@ describe('flow:test:run', () => {
       expect(logStub.firstCall.args[0]).to.include('MyFlowTests.testConfig  Pass              53');
     });
 
-    it('should parse tests flags correctly comma separated', async () => {
-      const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
-
-      await FlowRunTest.run(['--tests', 'MyFlowTests.test1,MyFlowTests.test2', '--result-format', 'human']);
-      // eslint-disable-next-line no-console
-      console.log(flowStub.firstCall.args[0]);
-      expect(flowStub.firstCall.args[0]).to.deep.equal({
-        skipCodeCoverage: true,
-        testLevel: 'RunSpecifiedTests',
-        tests: [
-          {
-            className: 'flowtesting.MyFlowTests',
-            testMethods: ['test1', 'test2'],
-          },
-        ],
-      });
-    });
-
     it('should parse tests flags correctly multi-flag', async () => {
       const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
 
@@ -302,24 +284,6 @@ describe('flow:test:run', () => {
           {
             className: 'flowtesting.MyFlowTests',
             testMethods: ['test1', 'test2'],
-          },
-        ],
-      });
-    });
-
-    it('should parse class-names flags correctly comma separated', async () => {
-      const flowStub = sandbox.stub(TestService.prototype, 'runTestAsynchronous').resolves(testRunSimple);
-
-      await FlowRunTest.run(['--class-names', 'MyFirstTest,MySecondTest', '--result-format', 'human']);
-      expect(flowStub.firstCall.args[0]).to.deep.equal({
-        skipCodeCoverage: true,
-        testLevel: 'RunSpecifiedTests',
-        tests: [
-          {
-            className: 'flowtesting.MyFirstTest',
-          },
-          {
-            className: 'flowtesting.MySecondTest',
           },
         ],
       });
