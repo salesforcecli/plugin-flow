@@ -116,6 +116,8 @@ EXAMPLES
       me@my.org'
 ```
 
+_See code: [src/commands/flow/get/test.ts](https://github.com/salesforcecli/plugin-flow/blob/0.0.3-qa.0/src/commands/flow/get/test.ts)_
+
 ## `sf flow run test`
 
 Invoke flow tests in an org.
@@ -172,7 +174,7 @@ EXAMPLES
 
   Run all the Flow1 and Flow2 flow tests in the org with alias “scratchOrg”:
 
-    $ sf flow run test —target-org scratchOrg —class-names Flow1 --class-names Flow2
+    $ sf flow run test --target-org scratchOrg --class-names Flow1 --class-names Flow2
 
   Run specific Flow1 and Flow2 flow tests in your default org:
 
@@ -210,5 +212,7 @@ FLAG DESCRIPTIONS
 
     Default is all flow tests. If you specify --tests, you can't specify --class-names.
 ```
+
+_See code: [src/commands/flow/run/test.ts](https://github.com/salesforcecli/plugin-flow/blob/0.0.3-qa.0/src/commands/flow/run/test.ts)_
 
 <!-- commandsstop -->

@@ -18,7 +18,7 @@ You must have the "View All Data" org system permission to use this command. The
   <%= config.bin %> <%= command.id %> --test-level RunLocalTests
 
 - Run all the Flow1 and Flow2 flow tests in the org with alias “scratchOrg”:
-  <%= config.bin %> <%= command.id %> —target-org scratchOrg —class-names Flow1 --class-names Flow2
+  <%= config.bin %> <%= command.id %> --target-org scratchOrg --class-names Flow1 --class-names Flow2
 
 - Run specific Flow1 and Flow2 flow tests in your default org:
   <%= config.bin %> <%= command.id %> --tests Flow1.Test1 --tests Flow2.Test2 --test-level RunSpecifiedTests
