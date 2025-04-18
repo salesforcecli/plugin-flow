@@ -75,7 +75,6 @@ export const suiteNamesFlag = Flags.string({
 });
 
 export const testsFlag = Flags.string({
-  aliases: ['tests'],
   char: 't',
   multiple: true,
   summary: messages.getMessage('flags.tests.summary'),
