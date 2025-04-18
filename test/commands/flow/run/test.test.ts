@@ -558,17 +558,17 @@ describe('flow:test:run', () => {
   describe('validateFlags', () => {
     it('rejects tests/classnames/suitenames and testlevels', async () => {
       try {
-        await FlowRunTest.run(['--tests', 'flowtesting.mytest', '--test-level', 'RunAllTestsInOrg']);
+        await FlowRunTest.run(['--tests', 'mytest', '--test-level', 'RunAllTestsInOrg']);
       } catch (e) {
         expect((e as Error).message).to.equal(messages.getMessage('testLevelErr'));
       }
       try {
-        await FlowRunTest.run(['--class-names', 'flowtesting.mytest', '--test-level', 'RunAllTestsInOrg']);
+        await FlowRunTest.run(['--class-names', 'mytest', '--test-level', 'RunAllTestsInOrg']);
       } catch (e) {
         expect((e as Error).message).to.equal(messages.getMessage('testLevelErr'));
       }
       try {
-        await FlowRunTest.run(['--suite-names', 'flowtesting.mytest', '--test-level', 'RunAllTestsInOrg']);
+        await FlowRunTest.run(['--suite-names', 'mytest', '--test-level', 'RunAllTestsInOrg']);
       } catch (e) {
         expect((e as Error).message).to.equal(messages.getMessage('testLevelErr'));
       }

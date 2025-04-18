@@ -104,7 +104,7 @@ Synchronous test runs can include test methods from only one Flow class. Omit th
 
 # testLevelErr
 
-When specifying classnames, suitenames, or tests, indicate RunSpecifiedTests as the testlevel
+When specifying flows or tests, indicate RunSpecifiedTests as the testlevel.
 
 # testResultProcessErr
 
@@ -126,7 +126,3 @@ Unknown error in Apex Library: %s
 # syncClassErr
 
 Synchronous test runs can include test methods from only one Flow class. Omit the --synchronous flag or include tests from only one class
-
-# testLevelErr
-
-When specifying classnames, suitenames, or tests, indicate RunSpecifiedTests as the testlevel
