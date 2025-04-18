@@ -1,6 +1,6 @@
 {
   "name": "@salesforce/plugin-flow",
-  "description": "temp plugin for flow test",
+  "description": "Plugin for testing flows",
   "version": "0.0.3-qa.0",
   "dependencies": {
     "@oclif/core": "^4.2.10",
@@ -47,14 +47,14 @@
       "@oclif/plugin-help"
     ],
     "topics": {
-      "hello": {
-        "description": "Commands to say hello."
-      },
       "flow": {
-        "description": "description for flow",
+        "description": "Commands for testing flows",
         "subtopics": {
           "run": {
-            "description": "description for flow.run"
+            "description": "Running flow tests"
+          },
+          "get": {
+            "description": "Getting flow test results"
           }
         }
       }

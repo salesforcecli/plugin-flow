@@ -31,13 +31,14 @@ $ yarn build
 Link the plugin from the `plugin-flow` package directory and then run your command:
 
 ```
-$ sfdx plugins:link .
+$ sf plugins link .
+$ sf flow run test -o myOrg@example.com
 ```
 
 Alternatively, you can also run the command from the `plugin-flow` package directory without linking the plugin:
 
 ```
-$ NODE_OPTIONS=--inspect-brk bin/dev force:flow:run:test -u myOrg@example.com
+$ bin/dev.js flow run test -o myOrg@example.com
 ```
 
 <br />
@@ -52,35 +53,6 @@ $ yarn test
 ```
 
 <br />
-
-### Debugging the Plugin
-
-We recommend using the Visual Studio Code (VS Code) IDE for your plugin development. Included in the `.vscode` directory of this plugin is a `launch.json` config file, which allows you to attach a debugger to the node process when running your commands. To debug a command:
-
-1. If you linked your plugin to the Salesforce CLI using `yarn plugin:link`, call your command with the `dev-suspend` switch:
-
-```
-$ sfdx force:flow:run:test -u myOrg@example.com --dev-suspend
-```
-
-Alternatively, replace `sfdx` with `NODE_OPTIONS=--inspect-brk bin/dev` and run your command:
-
-```
-$ NODE_OPTIONS=--inspect-brk bin/dev force:flow:run:test -u myOrg@example.com
-```
-
-2. Set some breakpoints in your code.
-3. Click on the Debug icon in the Activity Bar to open up the Debugger view.
-4. In the upper left hand corner, set the launch configuration to `Attach to Remote`.
-5. Click the green play button on the left of the debugger view. The debugger should now be suspended on the first line of the program.
-6. Click the green play button in the mini toolbar to continue running the program.
-   <br /><br />
-   <img src="./.images/vscodeScreenshot.png" width="480" height="278">
-
-<br />
-Happy debugging!
-
-<br /><br />
 
 # Commands
 
@@ -123,9 +95,6 @@ DESCRIPTION
   To see code coverage results, use the --code-coverage flag with --result-format. The output displays a high-level
   summary of the test run and the code coverage values for flow tests in your org. If you specify human-readable result
   format, use the --detailed-coverage flag to see detailed coverage results for each test method run.
-
-ALIASES
-  $ sf force flow test report
 
 EXAMPLES
   Display flow test results for your default org using a test run ID:
@@ -182,22 +151,19 @@ DESCRIPTION
   Invoke flow tests in an org.
 
   Specify which tests to run by using the --class-names flag followed by the names of the flows you want to test. For
-  example, if you save a flow with the name Flow1, then use: –class-names Flow1.
+  example, if you save a flow with the name Flow1, then use: --class-names Flow1.
 
   To see code coverage results, use the --code-coverage flag with --result-format. The output displays a high-level
   summary of the test run and the code coverage values for classes in your org. If you specify human-readable result
   format, use the --detailed-coverage flag to see detailed coverage results for each test method run.
 
-  By default, flow run test runs asynchronously and immediately returns a test run ID. If you use the –synchronous flag,
-  you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the
+  By default, "flow run test" runs asynchronously and immediately returns a test run ID. If you use the -–synchronous
+  flag, you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the
   command displays the results. If the tests haven't finished by the end of the wait time, the command displays a test
-  run ID. Use the "sf flow get test --test-run-id" command to get the results.
+  run ID. Use the "flow get test --test-run-id" command to get the results.
 
   You must have the "View All Data" org system permission to use this command. The permission is disabled by default and
   can be enabled only by a system administrator.
-
-ALIASES
-  $ sf force flow test run
 
 EXAMPLES
   Run all local tests in your default org:
@@ -210,7 +176,7 @@ EXAMPLES
 
   Run specific Flow1 and Flow2 flow tests in your default org:
 
-    $ sf flow run test --tests Flow1.Test1 --tests Flow2.Test2
+    $ sf flow run test --tests Flow1.Test1 --tests Flow2.Test2 --test-level RunSpecifiedTests
 
   Run all tests synchronously in your default org; the command waits to display the test results until all tests
   finish:
@@ -230,6 +196,7 @@ FLAG DESCRIPTIONS
     packages.
     - RunAllTestsInOrg — All tests are run. The tests include all tests in your org, including tests of managed
     packages.
+    - RunSpecifiedTests - Only the tests that you specify with the --tests flag are run.
 
   -n, --class-names=<value>...  Flow names that contain flow tests to run.
 
@@ -239,15 +206,9 @@ FLAG DESCRIPTIONS
 
     Not available for flow tests.
 
-  -t, --tests=<value>...  Flow test class names or IDs and, if applicable, test methods to run; default is all tests.
+  -t, --tests=<value>...  Flow test names to run.
 
-    If you specify --tests, you can't specify --class-names or --suite-names
-    For multiple tests, repeat the flag for each.
-    --tests Test1 --tests Test2
+    Default is all flow tests. If you specify --tests, you can't specify --class-names.
 ```
 
 <!-- commandsstop -->
-
-- [`sf flow get test`](#sf-flow-get-test)
-- [`sf flow run`](#sf-flow-run)
-- [`sf flow run test`](#sf-flow-run-test)

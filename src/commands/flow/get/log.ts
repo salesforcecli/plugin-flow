@@ -28,11 +28,9 @@ export default class Log extends SfCommand<LogGetResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
-
+  public static readonly state = 'preview';
   public static readonly hidden = true;
 
-  public static readonly deprecateAliases = true;
-  public static readonly aliases = ['force:apex:log:get'];
   public static readonly flags = {
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
@@ -59,7 +57,7 @@ export default class Log extends SfCommand<LogGetResult> {
 
     if (flags['output-dir']) {
       this.log(`Log files written to ${flags['output-dir']}`);
-      // TODO: look at this --outputdir will change what --json returns
+      // TODO: look at this --output-dir will change what --json returns
       return logResults.map((logResult) => logResult.log);
     }
 
