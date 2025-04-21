@@ -1,0 +1,9 @@
+{
+  "productTag": "a1aB00000000Ih1IAE",
+  "defaultBuild": "offcore.tooling.56",
+  "issueTypeLabels": {
+    "feature": "USER STORY",
+    "regression": "BUG P1",
+    "bug": "BUG P3"
+  }
+}

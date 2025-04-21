@@ -33,8 +33,6 @@ export default class Test extends SfCommand<RunResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
-  public static readonly deprecateAliases = true;
-  public static readonly aliases = ['force:flow:test:report'];
 
   public static readonly flags = {
     'target-org': Flags.requiredOrg(),

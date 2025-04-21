@@ -1,0 +1,51 @@
+[
+  {
+    "alias": [],
+    "command": "flow:get:log",
+    "flagAliases": [],
+    "flagChars": ["d", "i", "n", "o"],
+    "flags": ["api-version", "flags-dir", "json", "log-id", "number", "output-dir", "target-org"],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
+    "command": "flow:get:test",
+    "flagAliases": [],
+    "flagChars": ["c", "d", "i", "o", "r"],
+    "flags": [
+      "api-version",
+      "code-coverage",
+      "concise",
+      "detailed-coverage",
+      "flags-dir",
+      "json",
+      "output-dir",
+      "result-format",
+      "target-org",
+      "test-run-id"
+    ],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
+    "command": "flow:run:test",
+    "flagAliases": ["classnames", "suitenames"],
+    "flagChars": ["c", "d", "l", "n", "o", "r", "s", "t", "y"],
+    "flags": [
+      "api-version",
+      "class-names",
+      "code-coverage",
+      "concise",
+      "flags-dir",
+      "json",
+      "output-dir",
+      "result-format",
+      "suite-names",
+      "synchronous",
+      "target-org",
+      "test-level",
+      "tests"
+    ],
+    "plugin": "@salesforce/plugin-flow"
+  }
+]

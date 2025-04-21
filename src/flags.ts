@@ -24,8 +24,6 @@ export const TestLevelValues = ['RunLocalTests', 'RunAllTestsInOrg', 'RunSpecifi
 const exclusiveTestSpecifiers = ['class-names', 'suite-names', 'tests'];
 
 export const resultFormatFlag = Flags.string({
-  deprecateAliases: true,
-  aliases: ['resultformat'],
   char: 'r',
   summary: messages.getMessage('flags.result-format.summary'),
   options: ['human', 'tap', 'junit', 'json'] as const,
@@ -33,15 +31,11 @@ export const resultFormatFlag = Flags.string({
 });
 
 export const codeCoverageFlag = Flags.boolean({
-  aliases: ['codecoverage'],
-  deprecateAliases: true,
   char: 'c',
   summary: messages.getMessage('flags.code-coverage.summary'),
 });
 
 export const outputDirectoryFlag = Flags.directory({
-  aliases: ['outputdir', 'output-directory'],
-  deprecateAliases: true,
   char: 'd',
   summary: messages.getMessage('flags.output-dir.summary'),
 });
@@ -56,8 +50,6 @@ export const synchronousFlag = Flags.boolean({
 });
 
 export const testLevelFlag = Flags.string({
-  deprecateAliases: true,
-  aliases: ['testlevel'],
   char: 'l',
   summary: messages.getMessage('flags.test-level.summary'),
   description: messages.getMessage('flags.test-level.description'),
@@ -70,6 +62,7 @@ export const classNamesFlag = Flags.string({
   multiple: true,
   summary: messages.getMessage('flags.class-names.summary'),
   description: messages.getMessage('flags.class-names.description'),
+  parse: async (input) => Promise.resolve(`flowtesting.${input}`),
   exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'class-names'),
 });
 
@@ -83,11 +76,11 @@ export const suiteNamesFlag = Flags.string({
 });
 
 export const testsFlag = Flags.string({
-  aliases: ['tests'],
   char: 't',
   multiple: true,
   summary: messages.getMessage('flags.tests.summary'),
   description: messages.getMessage('flags.tests.description'),
+  parse: async (input) => Promise.resolve(`flowtesting.${input}`),
   exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'tests'),
 });
 
@@ -99,8 +92,6 @@ export const numberFlag = Flags.integer({
 });
 
 export const logIdFlag = Flags.salesforceId({
-  deprecateAliases: true,
-  aliases: ['logid'],
   char: 'i',
   summary: messages.getMessage('flags.log-id.summary'),
   startsWith: '07L',
@@ -108,8 +99,6 @@ export const logIdFlag = Flags.salesforceId({
 });
 
 export const testRunIdFlag = Flags.salesforceId({
-  deprecateAliases: true,
-  aliases: ['testrunid'],
   char: 'i',
   summary: messages.getMessage('flags.test-run-id.summary'),
   required: true,

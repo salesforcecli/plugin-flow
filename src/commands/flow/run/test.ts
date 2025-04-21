@@ -40,8 +40,6 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
-  public static readonly deprecateAliases = true;
-  public static readonly aliases = ['force:flow:test:run'];
 
   public static readonly flags = {
     'target-org': Flags.requiredOrg(),
@@ -123,24 +121,8 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     const payload = {
       ...(await testService.buildSyncPayload(
         testLevel,
-        flags.tests
-          ?.map((str) =>
-            str
-              .split(',')
-              .filter((str2) => !!str2)
-              .map((str3) => `flowtesting.${str3.trim()}`)
-              .flat()
-          )
-          .join(','),
-        flags['class-names']
-          ?.map((str) =>
-            str
-              .split(',')
-              .filter((str2) => !!str2)
-              .map((str3) => `flowtesting.${str3.trim()}`)
-              .flat()
-          )
-          .join(','),
+        flags.tests?.join(','),
+        flags['class-names']?.join(','),
         'flow'
       )),
       skipCodeCoverage: !flags['code-coverage'],
@@ -169,24 +151,8 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     const payload = {
       ...(await testService.buildAsyncPayload(
         testLevel,
-        flags.tests
-          ?.map((str) =>
-            str
-              .split(',')
-              .filter((str2) => !!str2)
-              .map((str3) => `flowtesting.${str3.trim()}`)
-              .flat()
-          )
-          .join(','),
-        flags['class-names']
-          ?.map((str) =>
-            str
-              .split(',')
-              .filter((str2) => !!str2)
-              .map((str3) => `flowtesting.${str3.trim()}`)
-              .flat()
-          )
-          .join(','),
+        flags.tests?.join(','),
+        flags['class-names']?.join(','),
         flags['suite-names']?.join(','),
         'flow'
       )),
