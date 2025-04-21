@@ -62,6 +62,7 @@ export const classNamesFlag = Flags.string({
   multiple: true,
   summary: messages.getMessage('flags.class-names.summary'),
   description: messages.getMessage('flags.class-names.description'),
+  parse: async (input) => Promise.resolve(`flowtesting.${input}`),
   exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'class-names'),
 });
 
@@ -79,6 +80,7 @@ export const testsFlag = Flags.string({
   multiple: true,
   summary: messages.getMessage('flags.tests.summary'),
   description: messages.getMessage('flags.tests.description'),
+  parse: async (input) => Promise.resolve(`flowtesting.${input}`),
   exclusive: exclusiveTestSpecifiers.filter((specifier) => specifier !== 'tests'),
 });
 

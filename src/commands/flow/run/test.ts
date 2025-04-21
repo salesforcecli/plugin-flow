@@ -121,8 +121,8 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     const payload = {
       ...(await testService.buildSyncPayload(
         testLevel,
-        flags.tests?.map((str) => `flowtesting.${str}`).join(','),
-        flags['class-names']?.map((str) => `flowtesting.${str}`).join(','),
+        flags.tests?.join(','),
+        flags['class-names']?.join(','),
         'flow'
       )),
       skipCodeCoverage: !flags['code-coverage'],
@@ -151,8 +151,8 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     const payload = {
       ...(await testService.buildAsyncPayload(
         testLevel,
-        flags.tests?.map((str) => `flowtesting.${str}`).join(','),
-        flags['class-names']?.map((str) => `flowtesting.${str}`).join(','),
+        flags.tests?.join(','),
+        flags['class-names']?.join(','),
         flags['suite-names']?.join(','),
         'flow'
       )),
