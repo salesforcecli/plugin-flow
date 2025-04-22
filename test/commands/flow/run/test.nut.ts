@@ -23,9 +23,18 @@ describe('flow run test', () => {
   let session: TestSession;
   before(async () => {
     session = await TestSession.create({
-      devhubAuthStrategy: 'NONE',
       project: { sourceDir: join('test', 'mock-projects', 'flow-run-template') },
+      devhubAuthStrategy: 'AUTO',
+      scratchOrgs: [
+        {
+          config: join('config', 'project-scratch-def.json'),
+          setDefault: true,
+          alias: 'org',
+        },
+      ],
     });
+
+    execCmd('project:deploy:start -o org --source-dir force-app', { ensureExitCode: 0, cli: 'sf' });
   });
 
   after(async () => {
