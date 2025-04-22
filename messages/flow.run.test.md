@@ -8,7 +8,7 @@ Specify which tests to run by using the --class-names flag followed by the names
 
 To see code coverage results, use the --code-coverage flag with --result-format. The output displays a high-level summary of the test run and the code coverage values for classes in your org. If you specify human-readable result format, use the --detailed-coverage flag to see detailed coverage results for each test method run.
 
-By default, "flow run test" runs asynchronously and immediately returns a test run ID. If you use the -–synchronous flag, you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the command displays the results. If the tests haven't finished by the end of the wait time, the command displays a test run ID. Use the "flow get test --test-run-id" command to get the results.
+By default, "flow run test" runs asynchronously and immediately returns a test run ID. If you use the --synchronous flag, you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the command displays the results. If the tests haven't finished by the end of the wait time, the command displays a test run ID. Use the "flow get test --test-run-id" command to get the results.
 
 You must have the "View All Data" org system permission to use this command. The permission is disabled by default and can be enabled only by a system administrator.
 
@@ -24,7 +24,7 @@ You must have the "View All Data" org system permission to use this command. The
   <%= config.bin %> <%= command.id %> --tests Flow1.Test1 --tests Flow2.Test2 --test-level RunSpecifiedTests
 
 - Run all tests synchronously in your default org; the command waits to display the test results until all tests finish:
-  <%= config.bin %> <%= command.id %> –synchronous
+  <%= config.bin %> <%= command.id %> --synchronous
 
 - Run all local tests in the org with the username “me@my.org”; save the output to the specified directory:
   <%= config.bin %> <%= command.id %> --test-level RunLocalTests --output-dir /Users/susan/temp/cliOutput --target-org me@my.org

@@ -33,7 +33,7 @@ describe('flow run test', () => {
       ],
     });
 
-    execCmd('project:deploy:start -o org --source-dir force-app', { ensureExitCode: 0, cli: 'sf' });
+    execCmd('project deploy start -o org --source-dir force-app', { ensureExitCode: 0, cli: 'sf' });
   });
 
   after(async () => {
@@ -42,7 +42,7 @@ describe('flow run test', () => {
 
   describe('--result-format', () => {
     it('will print tap format', async () => {
-      const result = execCmd('flow:run:test', { ensureExitCode: 0 }).shellOutput.stdout;
+      const result = execCmd('flow run test --synchronous', { ensureExitCode: 0 }).shellOutput.stdout;
       expect(result).to.include('1..1');
       expect(result).to.include('ok 1');
       expect(result).to.include('--result-format <format>" to retrieve test results in a different format.');

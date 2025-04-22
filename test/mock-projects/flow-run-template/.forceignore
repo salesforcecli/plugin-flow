@@ -13,4 +13,4 @@ package.xml
 
 # LWC Jest
 
-**/**tests**/**
+**/__tests__/**
