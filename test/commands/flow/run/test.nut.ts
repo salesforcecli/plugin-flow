@@ -16,7 +16,6 @@
 import { join } from 'node:path';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect, config } from 'chai';
-
 config.truncateThreshold = 0;
 
 describe('flow run test', () => {
