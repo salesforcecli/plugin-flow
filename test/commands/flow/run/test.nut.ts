@@ -42,9 +42,7 @@ describe('flow run test', () => {
 
   describe('--result-format', () => {
     it('will print tap format', async () => {
-      const result = execCmd('flow run test --synchronous', { ensureExitCode: 0 }).shellOutput.stdout;
-      // eslint-disable-next-line no-console
-      console.log(result);
+      const result = execCmd('flow run test --result-format tap --wait 400', { ensureExitCode: 0 }).shellOutput.stdout;
       expect(result).to.include('1..1');
       expect(result).to.include('ok 1');
       expect(result).to.include('--result-format <format>" to retrieve test results in a different format.');
