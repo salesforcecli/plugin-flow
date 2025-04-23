@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Flow xmlns="http://soap.sforce.com/2006/04/metadata">
-    <apiVersion>64.0</apiVersion>
+    <apiVersion>65.0</apiVersion>
     <areMetricsLoggedToDataCloud>false</areMetricsLoggedToDataCloud>
     <environments>Default</environments>
-    <interviewLabel>FlowFromDevHub {!$Flow.CurrentDateTime}</interviewLabel>
-    <label>FlowFromDevHub_1</label>
+    <interviewLabel>Flow2 {!$Flow.CurrentDateTime}</interviewLabel>
+    <label>Flow2</label>
     <processMetadataValues>
         <name>BuilderType</name>
         <value>
@@ -25,14 +25,14 @@
     </processMetadataValues>
     <processType>AutoLaunchedFlow</processType>
     <recordUpdates>
-        <name>updateAccount</name>
-        <label>updateAccount</label>
+        <name>updateaccount</name>
+        <label>updateaccount</label>
         <locationX>0</locationX>
         <locationY>0</locationY>
         <inputAssignments>
             <field>Description</field>
             <value>
-                <stringValue>Test</stringValue>
+                <stringValue>test</stringValue>
             </value>
         </inputAssignments>
         <inputReference>$Record</inputReference>
@@ -41,7 +41,7 @@
         <locationX>0</locationX>
         <locationY>0</locationY>
         <connector>
-            <targetReference>updateAccount</targetReference>
+            <targetReference>updateaccount</targetReference>
         </connector>
         <object>Account</object>
         <recordTriggerType>Create</recordTriggerType>
