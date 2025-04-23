@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { join } from 'node:path';
+import fs from 'node:fs';
 import { execCmd, TestSession } from '@salesforce/cli-plugins-testkit';
 import { expect, config } from 'chai';
 config.truncateThreshold = 0;
@@ -47,5 +48,17 @@ describe('flow run test', () => {
       expect(result).to.include('ok 1');
       expect(result).to.include('--result-format <format>" to retrieve test results in a different format.');
     });
+  });
+
+  it('will create --output-dir', () => {
+    const result = execCmd('flow run test --output-dir testresults --code-coverage --wait 100', { ensureExitCode: 0 })
+      .shellOutput.stdout;
+    expect(result).to.include('Test result files written to testresults');
+    const outputDir = join(session.project.dir, 'testresults');
+    expect(fs.statSync(outputDir).isDirectory()).to.be.true;
+    expect(fs.readdirSync(outputDir).length).to.equal(6);
+    expect(fs.existsSync(join(outputDir, 'test-result-codecoverage.json'))).to.be.true;
+    expect(fs.existsSync(join(outputDir, 'test-result.txt'))).to.be.true;
+    expect(fs.existsSync(join(outputDir, 'test-run-id.txt'))).to.be.true;
   });
 });
