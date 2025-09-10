@@ -10,6 +10,8 @@ To see code coverage results, use the --code-coverage flag with --result-format.
 
 By default, "flow run test" runs asynchronously and immediately returns a test run ID. If you use the -–synchronous flag, you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the command displays the results. If the tests haven't finished by the end of the wait time, the command displays a test run ID. Use the "flow get test --test-run-id" command to get the results.
 
+To run both Flow and Apex tests together, run the "sf logic run test" CLI command, which has similar flags as this command, but expands the --tests flag to also include Apex tests.
+
 You must have the "View All Data" org system permission to use this command. The permission is disabled by default and can be enabled only by a system administrator.
 
 # examples
