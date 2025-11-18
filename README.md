@@ -116,7 +116,7 @@ EXAMPLES
       me@my.org'
 ```
 
-_See code: [src/commands/flow/get/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.3/src/commands/flow/get/test.ts)_
+_See code: [src/commands/flow/get/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.4/src/commands/flow/get/test.ts)_
 
 ## `sf flow run test`
 
@@ -163,6 +163,9 @@ DESCRIPTION
   flag, you can use the --wait flag to specify the number of minutes to wait; if the tests finish in that timeframe, the
   command displays the results. If the tests haven't finished by the end of the wait time, the command displays a test
   run ID. Use the "flow get test --test-run-id" command to get the results.
+
+  To run both Flow and Apex tests together, run the "sf logic run test" CLI command, which has similar flags as this
+  command, but expands the --tests flag to also include Apex tests.
 
   You must have the "View All Data" org system permission to use this command. The permission is disabled by default and
   can be enabled only by a system administrator.
@@ -213,6 +216,6 @@ FLAG DESCRIPTIONS
     Default is all flow tests. If you specify --tests, you can't specify --class-names.
 ```
 
-_See code: [src/commands/flow/run/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.3/src/commands/flow/run/test.ts)_
+_See code: [src/commands/flow/run/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.4/src/commands/flow/run/test.ts)_
 
 <!-- commandsstop -->

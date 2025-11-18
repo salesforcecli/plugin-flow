@@ -1,3 +1,9 @@
+## [1.0.4](https://github.com/salesforcecli/plugin-flow/compare/1.0.3...1.0.4) (2025-11-18)
+
+### Bug Fixes
+
+- add note about "sf logic run test" ([19c17d9](https://github.com/salesforcecli/plugin-flow/commit/19c17d9c15d3d8e7c47cd2c054fbff6fd77ae5e6))
+
 ## [1.0.3](https://github.com/salesforcecli/plugin-flow/compare/1.0.2...1.0.3) (2025-11-18)
 
 ### Bug Fixes
