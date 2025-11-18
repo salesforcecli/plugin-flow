@@ -1,3 +1,10 @@
+## [1.0.3](https://github.com/salesforcecli/plugin-flow/compare/1.0.2...1.0.3) (2025-11-18)
+
+### Bug Fixes
+
+- **deps:** bump @salesforce/apex-node from 8.1.20 to 8.3.4 ([908a989](https://github.com/salesforcecli/plugin-flow/commit/908a989791b3e67510a30f26d1b0da9c18f5f2a8))
+- tests ([5a74462](https://github.com/salesforcecli/plugin-flow/commit/5a74462a0d7c229e918077d0efee0ad0e252861b))
+
 ## [1.0.2](https://github.com/salesforcecli/plugin-flow/compare/1.0.1...1.0.2) (2025-04-21)
 
 ### Bug Fixes
