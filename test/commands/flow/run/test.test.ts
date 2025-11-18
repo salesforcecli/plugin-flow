@@ -282,7 +282,8 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            className: 'flowtesting.MyFlowTests',
+            namespace: 'flowtesting',
+            className: 'MyFlowTests',
             testMethods: ['test1', 'test2'],
           },
         ],
@@ -312,7 +313,7 @@ describe('flow:test:run', () => {
 
       await FlowRunTest.run(['--suite-names', 'MyFlowTest1,MyFlowTest2', '--result-format', 'human']);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
-        category: FLOW_CATEGORY,
+        category: [FLOW_CATEGORY],
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         suiteNames: 'MyFlowTest1,MyFlowTest2',
@@ -324,7 +325,7 @@ describe('flow:test:run', () => {
 
       await FlowRunTest.run(['-s', 'MyFlowTest1', '-s', 'MyFlowTest2', '--result-format', 'human']);
       expect(flowStub.firstCall.args[0]).to.deep.equal({
-        category: FLOW_CATEGORY,
+        category: [FLOW_CATEGORY],
         skipCodeCoverage: true,
         testLevel: 'RunSpecifiedTests',
         suiteNames: 'MyFlowTest1,MyFlowTest2',
