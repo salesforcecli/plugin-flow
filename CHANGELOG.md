@@ -1,3 +1,9 @@
+## [1.0.5](https://github.com/salesforcecli/plugin-flow/compare/1.0.4...1.0.5) (2025-12-02)
+
+### Bug Fixes
+
+- **deps:** bump @salesforce/core from 8.8.6 to 8.23.3 ([3bbf634](https://github.com/salesforcecli/plugin-flow/commit/3bbf634546942ddca18afccba51694b0853cee9d))
+
 ## [1.0.4](https://github.com/salesforcecli/plugin-flow/compare/1.0.3...1.0.4) (2025-11-18)
 
 ### Bug Fixes

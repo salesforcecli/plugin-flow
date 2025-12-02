@@ -116,7 +116,7 @@ EXAMPLES
       me@my.org'
 ```
 
-_See code: [src/commands/flow/get/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.4/src/commands/flow/get/test.ts)_
+_See code: [src/commands/flow/get/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.5/src/commands/flow/get/test.ts)_
 
 ## `sf flow run test`
 
@@ -216,6 +216,6 @@ FLAG DESCRIPTIONS
     Default is all flow tests. If you specify --tests, you can't specify --class-names.
 ```
 
-_See code: [src/commands/flow/run/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.4/src/commands/flow/run/test.ts)_
+_See code: [src/commands/flow/run/test.ts](https://github.com/salesforcecli/plugin-flow/blob/1.0.5/src/commands/flow/run/test.ts)_
 
 <!-- commandsstop -->
