@@ -282,8 +282,7 @@ describe('flow:test:run', () => {
         testLevel: 'RunSpecifiedTests',
         tests: [
           {
-            namespace: 'flowtesting',
-            className: 'MyFlowTests',
+            className: 'flowtesting.MyFlowTests',
             testMethods: ['test1', 'test2'],
           },
         ],
