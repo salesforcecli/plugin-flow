@@ -1,3 +1,15 @@
+# [2.0.0](https://github.com/salesforcecli/plugin-flow/compare/1.0.5...2.0.0) (2026-07-30)
+
+### Bug Fixes
+
+- update test assertion for apex-node namespace handling change ([03d9eb4](https://github.com/salesforcecli/plugin-flow/commit/03d9eb48cf992e223e78002dd69e2d692fa156cc))
+
+- feat!: require Node >=22, drop EOL Node versions @W-23480655@ ([85877ef](https://github.com/salesforcecli/plugin-flow/commit/85877ef335ea26e1fe4491cfc04db099cd584945))
+
+### BREAKING CHANGES
+
+- engines.node raised to >=22.0.0, dropping support for Node 18 and 20
+
 ## [1.0.5](https://github.com/salesforcecli/plugin-flow/compare/1.0.4...1.0.5) (2025-12-02)
 
 ### Bug Fixes
