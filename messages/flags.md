@@ -69,3 +69,7 @@ ID of the test run.
 # flags.detailed-coverage.summary
 
 Not available for flow tests.
+
+# flags.wait.summary
+
+Sets the streaming client socket timeout in minutes; specify a longer wait time if timeouts occur frequently.
