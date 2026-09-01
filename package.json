@@ -1,7 +1,7 @@
 {
   "name": "@salesforce/plugin-flow",
   "description": "Plugin for testing flows",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "dependencies": {
     "@oclif/core": "^5.0.0",
     "@salesforce/apex-node": "^9.0.7",

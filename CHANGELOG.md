@@ -1,3 +1,9 @@
+## [2.0.1](https://github.com/salesforcecli/plugin-flow/compare/2.0.0...2.0.1) (2026-09-01)
+
+### Bug Fixes
+
+- upgrade @oclif/core to v5 @W-23512455@ ([#108](https://github.com/salesforcecli/plugin-flow/issues/108)) ([63b8159](https://github.com/salesforcecli/plugin-flow/commit/63b8159bd35fa49b4d51de63a81f51271bdd6683))
+
 # [2.0.0](https://github.com/salesforcecli/plugin-flow/compare/1.0.5...2.0.0) (2026-07-30)
 
 ### Bug Fixes
