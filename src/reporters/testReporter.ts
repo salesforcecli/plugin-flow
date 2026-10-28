@@ -74,7 +74,7 @@ export class TestReporter {
     }
 
     try {
-      if (result.summary && result.summary.outcome === 'Failed') {
+      if (result.summary?.outcome === 'Failed') {
         process.exitCode = FAILURE_EXIT_CODE;
       }
       switch (options['result-format']) {
@@ -96,8 +96,9 @@ export class TestReporter {
             });
           }
           break;
-        default:
+        case undefined:
           this.logHuman(result, options['detailed-coverage'] as boolean, options['concise'], options['output-dir']);
+          break;
       }
     } catch (e) {
       this.ux.styledJSON(result);
@@ -156,6 +157,8 @@ export class TestReporter {
         resultFormatValue = ResultFormat.human;
       }
 
+      // ResultFormat values not handled here do not require an additional output file.
+      // eslint-disable-next-line @typescript-eslint/switch-exhaustiveness-check
       switch (resultFormatValue) {
         case ResultFormat.tap:
           outputDirConfig.fileInfos?.push({

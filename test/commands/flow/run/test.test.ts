@@ -60,7 +60,7 @@ describe('flow:test:run', () => {
     try {
       // the library writes to a directory, so we need to clean it up :(
       fs.rmSync('myDirectory', { recursive: true });
-    } catch (e) {
+    } catch {
       // do nothing
     }
   });
