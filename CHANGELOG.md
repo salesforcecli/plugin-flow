@@ -1,3 +1,9 @@
+## [2.0.2](https://github.com/salesforcecli/plugin-flow/compare/2.0.1...2.0.2) (2026-10-29)
+
+### Bug Fixes
+
+- migrate npm publishing to OIDC ([#109](https://github.com/salesforcecli/plugin-flow/issues/109)) ([6558cbc](https://github.com/salesforcecli/plugin-flow/commit/6558cbc4e96785b846b5213eff024aad7a0de093))
+
 ## [2.0.1](https://github.com/salesforcecli/plugin-flow/compare/2.0.0...2.0.1) (2026-09-01)
 
 ### Bug Fixes
