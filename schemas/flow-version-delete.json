@@ -1,0 +1,463 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlowVersionDeleteCommandReport",
+  "description": "C2 independent Flow version deletion with actual backend assessments and exact targets.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "mode",
+    "targetOrg",
+    "apiVersion",
+    "dryRun",
+    "confirmed",
+    "outcome",
+    "plan",
+    "deletion"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "2"
+    },
+    "mode": {
+      "const": "NORMAL"
+    },
+    "targetOrg": {
+      "type": "string"
+    },
+    "apiVersion": {
+      "type": "string"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "confirmed": {
+      "type": "boolean"
+    },
+    "outcome": {
+      "enum": ["PREVIEWED", "CANCELLED", "SUCCEEDED", "FAILED", "PARTIAL", "UNKNOWN"]
+    },
+    "plan": {
+      "$ref": "#/definitions/Plan"
+    },
+    "deletion": {
+      "anyOf": [
+        {
+          "$ref": "#/definitions/Execution"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "sourceType",
+        "sourceName",
+        "targetKind",
+        "targetId",
+        "targetName",
+        "channels",
+        "interviewRoles",
+        "detailsRedacted"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{18}$"
+        },
+        "sourceType": {
+          "type": "string"
+        },
+        "sourceName": {
+          "type": ["string", "null"]
+        },
+        "targetKind": {
+          "enum": ["VERSION", "OWNED_RESOURCE"]
+        },
+        "targetId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{18}$"
+        },
+        "targetName": {
+          "type": ["string", "null"]
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "interviewRoles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "detailsRedacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["versionId", "outcome", "reasonCode", "message", "evidence"],
+      "properties": {
+        "versionId": {
+          "type": "string",
+          "pattern": "^301[A-Za-z0-9]{15}$"
+        },
+        "outcome": {
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Evidence"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["referenceCount", "pausedInterviewCount", "failedInterviewCount"],
+          "properties": {
+            "referenceCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pausedInterviewCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failedInterviewCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "versionLimit": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Target": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definitionId",
+        "versionId",
+        "flowName",
+        "namespace",
+        "versionNumber",
+        "status",
+        "assessment",
+        "error"
+      ],
+      "properties": {
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "versionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^301[A-Za-z0-9]{15}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "assessment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Assessment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definitionId",
+        "versionId",
+        "flowName",
+        "namespace",
+        "versionNumber",
+        "status",
+        "assessment",
+        "error",
+        "state",
+        "targetDeleted",
+        "source"
+      ],
+      "properties": {
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "versionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^301[A-Za-z0-9]{15}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "assessment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Assessment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": ["SUCCEEDED", "BLOCKED", "FAILED", "UNKNOWN", "NOT_ATTEMPTED"]
+        },
+        "targetDeleted": {
+          "type": ["boolean", "null"]
+        },
+        "source": {
+          "enum": ["ASSESSMENT", "TOOLING", "CLIENT_POLICY", "RESOLUTION", "SAFETY"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "SUCCEEDED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetDeleted": {
+                "const": true
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": ["UNKNOWN", "NOT_ATTEMPTED"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetDeleted": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Plan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "orgId",
+        "flowName",
+        "namespace",
+        "definitionId",
+        "warnings",
+        "requestedVersions",
+        "versions",
+        "availableVersionCount"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "2"
+        },
+        "orgId": {
+          "type": "string",
+          "pattern": "^00D[A-Za-z0-9]{15}$"
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "requestedVersions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "uniqueItems": true,
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "versions": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/Target"
+          }
+        },
+        "availableVersionCount": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "Execution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "contractVersion",
+        "orgId",
+        "flowName",
+        "namespace",
+        "definitionId",
+        "warnings",
+        "mode",
+        "outcome",
+        "results"
+      ],
+      "properties": {
+        "contractVersion": {
+          "const": "2"
+        },
+        "orgId": {
+          "type": "string",
+          "pattern": "^00D[A-Za-z0-9]{15}$"
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mode": {
+          "const": "NORMAL"
+        },
+        "outcome": {
+          "enum": ["SUCCEEDED", "FAILED", "PARTIAL", "UNKNOWN"]
+        },
+        "results": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 200,
+          "items": {
+            "$ref": "#/definitions/Result"
+          }
+        }
+      }
+    }
+  }
+}

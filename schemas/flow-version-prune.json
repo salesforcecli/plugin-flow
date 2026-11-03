@@ -1,0 +1,642 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlowVersionPruneCommandReport",
+  "description": "C4 CLI retention policy, exact approved targets, and independent normal-delete results.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "mode",
+    "targetOrg",
+    "apiVersion",
+    "dryRun",
+    "confirmed",
+    "outcome",
+    "plan",
+    "deletion"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1"
+    },
+    "mode": {
+      "const": "RETENTION"
+    },
+    "targetOrg": {
+      "type": "string"
+    },
+    "apiVersion": {
+      "type": "string"
+    },
+    "dryRun": {
+      "type": "boolean"
+    },
+    "confirmed": {
+      "type": "boolean"
+    },
+    "outcome": {
+      "enum": ["PREVIEWED", "CANCELLED", "SUCCEEDED", "PARTIAL", "FAILED", "UNKNOWN"]
+    },
+    "plan": {
+      "$ref": "#/definitions/RetentionPlan"
+    },
+    "deletion": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "$ref": "#/definitions/RetentionExecution"
+        }
+      ]
+    }
+  },
+  "definitions": {
+    "Error": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "Evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "sourceId",
+        "sourceType",
+        "sourceName",
+        "targetKind",
+        "targetId",
+        "targetName",
+        "channels",
+        "interviewRoles",
+        "detailsRedacted"
+      ],
+      "properties": {
+        "sourceId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{18}$"
+        },
+        "sourceType": {
+          "type": "string"
+        },
+        "sourceName": {
+          "type": ["string", "null"]
+        },
+        "targetKind": {
+          "enum": ["VERSION", "OWNED_RESOURCE"]
+        },
+        "targetId": {
+          "type": "string",
+          "pattern": "^[A-Za-z0-9]{18}$"
+        },
+        "targetName": {
+          "type": ["string", "null"]
+        },
+        "channels": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "interviewRoles": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "detailsRedacted": {
+          "type": "boolean"
+        }
+      }
+    },
+    "Assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["versionId", "outcome", "reasonCode", "message", "evidence"],
+      "properties": {
+        "versionId": {
+          "type": "string",
+          "pattern": "^301[A-Za-z0-9]{15}$"
+        },
+        "outcome": {
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Evidence"
+          }
+        },
+        "counts": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["referenceCount", "pausedInterviewCount", "failedInterviewCount"],
+          "properties": {
+            "referenceCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "pausedInterviewCount": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "failedInterviewCount": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        },
+        "versionLimit": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "Result": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "definitionId",
+        "versionId",
+        "flowName",
+        "namespace",
+        "versionNumber",
+        "status",
+        "assessment",
+        "error",
+        "state",
+        "targetDeleted",
+        "source"
+      ],
+      "properties": {
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "versionId": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^301[A-Za-z0-9]{15}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "flowName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "assessment": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Assessment"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/Error"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "enum": ["SUCCEEDED", "BLOCKED", "FAILED", "UNKNOWN", "NOT_ATTEMPTED"]
+        },
+        "targetDeleted": {
+          "type": ["boolean", "null"]
+        },
+        "source": {
+          "enum": ["ASSESSMENT", "TOOLING", "CLIENT_POLICY", "RESOLUTION", "SAFETY"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "const": "SUCCEEDED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetDeleted": {
+                "const": true
+              },
+              "error": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "state": {
+                "enum": ["UNKNOWN", "NOT_ATTEMPTED"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "targetDeleted": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "versionId",
+        "versionNumber",
+        "versionName",
+        "status",
+        "createdDate",
+        "ageDays",
+        "createdById",
+        "createdByName",
+        "lastModifiedDate",
+        "referenceCount",
+        "pausedInterviewCount",
+        "failedInterviewCount",
+        "deletable",
+        "outcome",
+        "reasonCode",
+        "message",
+        "statusChangeDate",
+        "disposition",
+        "reasons"
+      ],
+      "properties": {
+        "versionId": {
+          "type": "string",
+          "pattern": "^301[A-Za-z0-9]{15}$"
+        },
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "createdDate": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "ageDays": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "createdById": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^005[A-Za-z0-9]{15}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdByName": {
+          "type": ["string", "null"]
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "statusChangeDate": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Stored UTC status-change timestamp; null means no stored value. Omitted by older Core builds."
+        },
+        "referenceCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "pausedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "failedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "deletable": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "disposition": {
+          "enum": ["KEPT", "CANDIDATE", "BLOCKED", "ERROR"]
+        },
+        "reasons": {
+          "type": "array",
+          "minItems": 1,
+          "items": {
+            "$ref": "#/definitions/Reason"
+          }
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "PASS"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "deletable": {
+                "const": true
+              },
+              "reasonCode": {
+                "type": "null"
+              },
+              "message": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["BLOCKED", "ERROR"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "deletable": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["PASS", "BLOCKED"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "referenceCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pausedInterviewCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failedInterviewCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "BLOCKED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definitionId", "apiName", "label", "versionCount", "limitPercent", "versions"],
+      "properties": {
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "apiName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "versionCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "limitPercent": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Version"
+          }
+        }
+      }
+    },
+    "Reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code", "message"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "Policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["keepLatest", "olderThanDays"],
+      "properties": {
+        "keepLatest": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "olderThanDays": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 36500
+        }
+      }
+    },
+    "RetentionPlan": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["orgId", "generatedAt", "scope", "policy", "flows"],
+      "properties": {
+        "orgId": {
+          "type": "string",
+          "pattern": "^00D[A-Za-z0-9]{15}$"
+        },
+        "generatedAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "scope": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["all", "flowName", "namespace", "allNamespaces"],
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "flowName": {
+              "type": ["string", "null"]
+            },
+            "namespace": {
+              "type": "null"
+            },
+            "allNamespaces": {
+              "type": "boolean"
+            }
+          }
+        },
+        "policy": {
+          "$ref": "#/definitions/Policy"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Flow"
+          }
+        }
+      }
+    },
+    "RetentionExecution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["outcome", "results", "warnings"],
+      "properties": {
+        "outcome": {
+          "enum": ["SUCCEEDED", "PARTIAL", "FAILED", "UNKNOWN"]
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Result"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "PREVIEWED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "dryRun": {
+            "const": true
+          },
+          "confirmed": {
+            "const": false
+          },
+          "deletion": {
+            "type": "null"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "outcome": {
+            "const": "CANCELLED"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "confirmed": {
+            "const": false
+          },
+          "deletion": {
+            "type": "null"
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,11 +1,14 @@
 {
   "name": "@salesforce/plugin-flow",
-  "description": "Plugin for testing flows",
+  "description": "Salesforce CLI commands for Flow testing, dependency analysis, and version management",
   "version": "2.0.2",
   "dependencies": {
+    "@inquirer/confirm": "^6.1.1",
+    "@inquirer/input": "^5.1.9",
     "@oclif/core": "^5.0.0",
     "@salesforce/apex-node": "^9.0.7",
     "@salesforce/core": "^9.1.9",
+    "@salesforce/flow-node": "git+https://github.com/forcedotcom/flows.git#98a0fe5a2611d20cf62c589388b3f887394162f4",
     "@salesforce/kit": "^4.0.0",
     "@salesforce/sf-plugins-core": "^13.0.4",
     "ansis": "^3.17.0"
@@ -20,6 +23,7 @@
     "@types/mocha": "^10.0.10",
     "@types/node": "^18",
     "@types/sinon": "^10.0.20",
+    "ajv": "^6.12.6",
     "eslint": "^10.4.0",
     "eslint-config-salesforce-typescript": "^6.0.0",
     "eslint-plugin-sf-plugin": "^3.0.1",
@@ -60,13 +64,16 @@
     ],
     "topics": {
       "flow": {
-        "description": "Commands for testing flows",
+        "description": "Commands for testing flows and managing Flow dependencies and versions",
         "subtopics": {
           "run": {
             "description": "Running flow tests"
           },
           "get": {
             "description": "Getting flow test results"
+          },
+          "version": {
+            "description": "Manage Flow versions"
           }
         }
       }
@@ -107,7 +114,9 @@
       "files": [
         "src/**/*.ts",
         "**/tsconfig.json",
-        "messages/**"
+        "messages/**",
+        "package.json",
+        "yarn.lock"
       ],
       "output": [
         "lib/**",
@@ -160,13 +169,19 @@
       },
       "files": [
         "test/**/*.ts",
+        "test/**/*.mjs",
         "src/**/*.ts",
         "**/tsconfig.json",
         ".mocha*",
         "!*.nut.ts",
-        ".nycrc"
+        ".nycrc",
+        "package.json",
+        "yarn.lock"
       ],
-      "output": []
+      "output": [],
+      "dependencies": [
+        "compile"
+      ]
     },
     "test:command-reference": {
       "command": "node --loader ts-node/esm --no-warnings=ExperimentalWarning \"./bin/dev.js\" commandreference:generate --erroronwarnings",

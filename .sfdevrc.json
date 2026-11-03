@@ -5,6 +5,31 @@
   "wireit": {
     "test": {
       "dependencies": ["test:compile", "test:only", "lint"]
+    },
+    "test:only": {
+      "command": "nyc mocha \"test/**/*.test.ts\"",
+      "env": {
+        "FORCE_COLOR": "2"
+      },
+      "files": [
+        "test/**/*.ts",
+        "test/**/*.mjs",
+        "src/**/*.ts",
+        "**/tsconfig.json",
+        ".mocha*",
+        "!*.nut.ts",
+        ".nycrc",
+        "package.json",
+        "yarn.lock"
+      ],
+      "output": [],
+      "dependencies": ["compile"]
+    },
+    "compile": {
+      "command": "tsc -p . --pretty --incremental",
+      "files": ["src/**/*.ts", "**/tsconfig.json", "messages/**", "package.json", "yarn.lock"],
+      "output": ["lib/**", "*.tsbuildinfo"],
+      "clean": "if-file-deleted"
     }
   }
 }

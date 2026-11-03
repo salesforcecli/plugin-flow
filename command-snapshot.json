@@ -1,6 +1,23 @@
 [
   {
     "alias": [],
+    "command": "flow:dependencies",
+    "flagAliases": [],
+    "flagChars": ["f", "o"],
+    "flags": [
+      "api-version",
+      "flags-dir",
+      "flow-name",
+      "json",
+      "namespace",
+      "scan-flow",
+      "target-org",
+      "version-policy"
+    ],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
     "command": "flow:get:log",
     "flagAliases": [],
     "flagChars": ["d", "i", "n", "o"],
@@ -45,6 +62,65 @@
       "target-org",
       "test-level",
       "tests"
+    ],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
+    "command": "flow:version:delete",
+    "flagAliases": [],
+    "flagChars": ["f", "o", "y"],
+    "flags": [
+      "api-version",
+      "dry-run",
+      "flags-dir",
+      "flow",
+      "force",
+      "json",
+      "namespace",
+      "target-org",
+      "versions",
+      "yes"
+    ],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
+    "command": "flow:version:list",
+    "flagAliases": [],
+    "flagChars": ["f", "o"],
+    "flags": [
+      "all",
+      "api-version",
+      "deletable",
+      "flags-dir",
+      "flow",
+      "json",
+      "min-percent",
+      "namespace",
+      "older-than",
+      "status",
+      "target-org"
+    ],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
+    "command": "flow:version:prune",
+    "flagAliases": [],
+    "flagChars": ["f", "o", "y"],
+    "flags": [
+      "all",
+      "api-version",
+      "dry-run",
+      "execute",
+      "flags-dir",
+      "flow",
+      "json",
+      "keep-latest",
+      "older-than",
+      "target-org",
+      "yes"
     ],
     "plugin": "@salesforce/plugin-flow"
   }
