@@ -26,7 +26,7 @@ No Flow, interview, reference or business record is modified. This command never
 
 - List versions of a namespaced Flow using its qualified API name:
 
-  <%= config.bin %> <%= command.id %> --target-org my-org --flow billing\_\_MyFlow
+  <%= config.bin %> <%= command.id %> --target-org my-org --flow billing__MyFlow
 
 - Find Flows using at least 80 percent of their configured version limit:
 
