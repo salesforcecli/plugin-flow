@@ -1,0 +1,213 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/DependencyCommandReport",
+  "definitions": {
+    "DependencyCommandReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "targetOrg": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "generatedAt": {
+          "type": "string"
+        },
+        "root": {
+          "$ref": "#/definitions/FlowIdentity"
+        },
+        "versionPolicy": {
+          "type": "string",
+          "enum": ["latest", "active"]
+        },
+        "scannedFlows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowIdentity"
+          }
+        },
+        "relationships": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/DependencyRelationship"
+          }
+        },
+        "mcd": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": "string",
+              "enum": ["success", "partial", "failed"]
+            },
+            "reportedEdges": {
+              "type": "array",
+              "items": {
+                "$ref": "#/definitions/MetadataDependencyEdge"
+              }
+            },
+            "queryCount": {
+              "type": "number"
+            },
+            "limit": {
+              "type": "number"
+            }
+          },
+          "required": ["status", "reportedEdges", "queryCount", "limit"],
+          "additionalProperties": false
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "flowMetadata": {
+              "type": "string",
+              "const": "explicit-flows-only"
+            },
+            "requestedFlowNames": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "orgWideComplete": {
+              "type": "boolean",
+              "const": false
+            },
+            "apexSourceScanned": {
+              "type": "boolean",
+              "const": false
+            }
+          },
+          "required": ["flowMetadata", "requestedFlowNames", "orgWideComplete", "apexSourceScanned"],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "apiVersion",
+        "generatedAt",
+        "mcd",
+        "relationships",
+        "root",
+        "scannedFlows",
+        "scope",
+        "targetOrg",
+        "versionPolicy",
+        "warnings"
+      ]
+    },
+    "FlowIdentity": {
+      "type": "object",
+      "properties": {
+        "flowName": {
+          "type": "string"
+        },
+        "namespace": {
+          "type": ["string", "null"]
+        },
+        "definitionId": {
+          "type": "string"
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "type": "number"
+        },
+        "status": {
+          "type": "string"
+        }
+      },
+      "required": ["flowName", "namespace", "definitionId", "versionId", "versionNumber", "status"],
+      "additionalProperties": false
+    },
+    "DependencyRelationship": {
+      "type": "object",
+      "properties": {
+        "direction": {
+          "type": "string",
+          "enum": ["incoming", "outgoing"]
+        },
+        "callerType": {
+          "type": "string"
+        },
+        "callerName": {
+          "type": "string"
+        },
+        "callerId": {
+          "type": "string"
+        },
+        "callerVersion": {
+          "type": "number"
+        },
+        "callerStatus": {
+          "type": "string"
+        },
+        "targetType": {
+          "type": "string"
+        },
+        "targetName": {
+          "type": "string"
+        },
+        "targetId": {
+          "type": "string"
+        },
+        "elementName": {
+          "type": "string"
+        },
+        "evidence": {
+          "type": "string",
+          "enum": ["Flow.Metadata", "MetadataComponentDependency"]
+        }
+      },
+      "required": ["direction", "callerType", "callerName", "targetType", "targetName", "evidence"],
+      "additionalProperties": false
+    },
+    "MetadataDependencyEdge": {
+      "type": "object",
+      "properties": {
+        "MetadataComponentId": {
+          "type": ["string", "null"]
+        },
+        "MetadataComponentName": {
+          "type": ["string", "null"]
+        },
+        "MetadataComponentType": {
+          "type": ["string", "null"]
+        },
+        "MetadataComponentNamespace": {
+          "type": ["string", "null"]
+        },
+        "RefMetadataComponentId": {
+          "type": ["string", "null"]
+        },
+        "RefMetadataComponentName": {
+          "type": ["string", "null"]
+        },
+        "RefMetadataComponentType": {
+          "type": ["string", "null"]
+        },
+        "RefMetadataComponentNamespace": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "MetadataComponentId",
+        "MetadataComponentName",
+        "MetadataComponentType",
+        "MetadataComponentNamespace",
+        "RefMetadataComponentId",
+        "RefMetadataComponentName",
+        "RefMetadataComponentType",
+        "RefMetadataComponentNamespace"
+      ],
+      "additionalProperties": false
+    }
+  }
+}

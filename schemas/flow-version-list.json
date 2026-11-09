@@ -1,0 +1,216 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowVersionListCommandReport",
+  "definitions": {
+    "FlowVersionListCommandReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "targetOrg": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "contractVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "generatedAt": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "flowName": {
+              "type": ["string", "null"]
+            },
+            "namespace": {
+              "type": ["string", "null"]
+            },
+            "allNamespaces": {
+              "type": "boolean"
+            }
+          },
+          "required": ["all", "flowName", "namespace", "allNamespaces"],
+          "additionalProperties": false
+        },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": ["string", "null"]
+            },
+            "olderThan": {
+              "type": ["string", "null"]
+            },
+            "minPercent": {
+              "type": ["number", "null"]
+            },
+            "deletable": {
+              "type": "boolean"
+            }
+          },
+          "required": ["status", "olderThan", "minPercent", "deletable"],
+          "additionalProperties": false
+        },
+        "versionLimit": {
+          "type": "number"
+        },
+        "returnedVersionCount": {
+          "type": "number",
+          "description": "Actual number of merged output versions, after an optional inactive compatibility filter."
+        },
+        "candidateVersionCount": {
+          "type": "number",
+          "description": "Largest server candidate-prefix count observed; not an all-org version total."
+        },
+        "listTruncated": {
+          "type": "boolean",
+          "description": "True if any server page reported a truncated catalog, even after continuation is exhausted."
+        },
+        "catalogComplete": {
+          "type": "boolean",
+          "description": "Complete, unfiltered scope reconciled against the terminal page and every Flow count."
+        },
+        "nextOffset": {
+          "type": "null"
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectFlowVersionListFlow"
+          }
+        }
+      },
+      "required": [
+        "apiVersion",
+        "candidateVersionCount",
+        "catalogComplete",
+        "contractVersion",
+        "filters",
+        "flows",
+        "generatedAt",
+        "listTruncated",
+        "nextOffset",
+        "orgId",
+        "returnedVersionCount",
+        "scope",
+        "targetOrg",
+        "versionLimit"
+      ]
+    },
+    "ConnectFlowVersionListFlow": {
+      "type": "object",
+      "properties": {
+        "definitionId": {
+          "type": "string"
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "versionCount": {
+          "type": ["number", "null"]
+        },
+        "limitPercent": {
+          "type": ["number", "null"]
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectFlowVersionListVersion"
+          }
+        }
+      },
+      "required": ["definitionId", "apiName", "label", "versionCount", "limitPercent", "versions"],
+      "additionalProperties": false
+    },
+    "ConnectFlowVersionListVersion": {
+      "type": "object",
+      "properties": {
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "type": "number"
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "createdDate": {
+          "type": ["string", "null"]
+        },
+        "ageDays": {
+          "type": ["number", "null"]
+        },
+        "createdById": {
+          "type": ["string", "null"]
+        },
+        "createdByName": {
+          "type": ["string", "null"]
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"]
+        },
+        "statusChangeDate": {
+          "type": ["string", "null"],
+          "description": "Omitted by older servers; null means Core has no stored status-change time."
+        },
+        "referenceCount": {
+          "type": ["number", "null"]
+        },
+        "pausedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "failedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "deletable": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": [
+        "versionId",
+        "versionNumber",
+        "versionName",
+        "status",
+        "createdDate",
+        "ageDays",
+        "createdById",
+        "createdByName",
+        "lastModifiedDate",
+        "referenceCount",
+        "pausedInterviewCount",
+        "failedInterviewCount",
+        "deletable",
+        "outcome",
+        "reasonCode",
+        "message"
+      ],
+      "additionalProperties": false,
+      "description": "Values returned by Core, without inferred blockers, references or interview counts."
+    }
+  }
+}
