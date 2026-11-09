@@ -217,6 +217,7 @@ export class FlowVersionRetentionService {
       state,
       targetDeleted: state === 'FAILED' ? false : null,
       source: 'CLIENT_POLICY',
+      coreResult: null,
     };
   }
 
@@ -303,16 +304,16 @@ export class FlowVersionRetentionService {
           },
           assessVersions: (targets): ReturnType<FlowVersionDeleteClient['assessVersions']> =>
             this.deleteClient.assessVersions(targets),
-          deleteVersion: (versionId): ReturnType<FlowVersionDeleteClient['deleteVersion']> =>
-            this.deleteClient.deleteVersion(versionId),
+          deleteVersions: (targets): ReturnType<FlowVersionDeleteClient['deleteVersions']> =>
+            this.deleteClient.deleteVersions(targets),
         });
         let executionStarted = false;
         try {
           // eslint-disable-next-line no-await-in-loop -- Independent mutations must remain strictly ordered.
-          const deletionPlan = await service.plan({
-            flowName: flow.apiName,
-            versions: chunk.map((row) => row.versionNumber).join(','),
-          });
+          const deletionPlan = await service.plan(
+            { flowName: flow.apiName, versions: chunk.map((row) => row.versionNumber).join(',') },
+            { preview: false }
+          );
           if (
             deletionPlan.definitionId !== flow.definitionId ||
             deletionPlan.versions.some((target, index) => target.versionId !== chunk[index]?.versionId)

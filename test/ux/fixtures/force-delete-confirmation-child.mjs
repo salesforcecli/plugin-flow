@@ -1,4 +1,5 @@
 import { ForceDeleteConfirmationPrompt } from '../../../lib/ux/forceDeleteConfirmation.js';
+import { ConfirmationTimeoutError } from '../../../lib/ux/confirmationTimeout.js';
 import { emitKeypressEvents } from 'node:readline';
 
 // Node installs one shared keypress decoder on first use; it is not a prompt listener.
@@ -11,17 +12,26 @@ process.stdin.pause();
 const before = process.stdin.listenerCount('data');
 const keypressBefore = process.stdin.listenerCount('keypress');
 const rawBefore = process.stdin.isRaw;
-const confirmed = await new ForceDeleteConfirmationPrompt().confirm({
-  flowApiName: 'Fixture_Flow',
-  versionNumber: 12,
-  flowNameMessage: 'TYPE_FLOW_API_NAME:',
-  versionMessage: 'TYPE_VERSION_NUMBER:',
-  output: process.argv[3] === 'stderr' ? process.stderr : process.stdout,
-  ms: Number(process.argv[2]),
-});
+let confirmed = false;
+let timedOut = false;
+try {
+  confirmed = await new ForceDeleteConfirmationPrompt().confirm({
+    flowApiName: 'Fixture_Flow',
+    versionNumber: 12,
+    flowNameMessage: 'TYPE_FLOW_API_NAME:',
+    versionMessage: 'TYPE_VERSION_NUMBER:',
+    output: process.argv[3] === 'stderr' ? process.stderr : process.stdout,
+    ms: Number(process.argv[2]),
+  });
+} catch (error) {
+  if (!(error instanceof ConfirmationTimeoutError)) throw error;
+  timedOut = true;
+}
+process.exitCode = timedOut ? 69 : confirmed ? 0 : 1;
 process.stdout.write(
   `FORCE_CONFIRMATION_RESULT:${JSON.stringify({
     confirmed,
+    timedOut,
     mutations: confirmed ? 1 : 0,
     inputPaused: process.stdin.isPaused(),
     inputIsTTY: process.stdin.isTTY,

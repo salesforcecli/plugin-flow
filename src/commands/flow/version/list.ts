@@ -23,6 +23,7 @@ import {
   type ConnectFlowVersionListVersion,
 } from '@salesforce/flow-node';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
+import { listExitCode } from '../../../reporters/flowVersionMutationReport.js';
 import { formatFlowVersionTable, type FlowVersionTableRow } from '../../../ux/flowVersionTable.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -36,8 +37,18 @@ export type FlowVersionListCommandReport = ConnectFlowVersionListReport & {
 const terminalText = (value: unknown): string =>
   stripVTControlCharacters(String(value)).replace(/[\p{Cc}\p{Cf}]/gu, ' ');
 
+const inputErrorCodes = new Set([
+  'INVALID_IDENTIFIER',
+  'INVALID_SELECTION',
+  'INVALID_FILTER',
+  'UNSUPPORTED_FILTER',
+  'LIST_API_VERSION_UNSUPPORTED',
+]);
 const sdkError = (error: unknown): never => {
-  if (error instanceof FlowVersionError) throw new SfError(error.message, error.code);
+  if (error instanceof FlowVersionError) {
+    if (inputErrorCodes.has(error.code)) throw messages.createError('error.invalidInput', [error.message], [], 2);
+    throw new SfError(error.message, error.code);
+  }
   throw error;
 };
 
@@ -116,9 +127,9 @@ export default class FlowVersionList extends SfCommand<FlowVersionListCommandRep
 
   public async run(): Promise<FlowVersionListCommandReport> {
     const { flags } = await this.parse(FlowVersionList);
-    if (!flags.flow && !flags.all) throw new SfError(messages.getMessage('scopeRequired'), 'FlowVersionScopeRequired');
+    if (!flags.flow && !flags.all) throw messages.createError('error.scopeRequired', [], [], 2);
     if (flags['min-percent'] !== undefined && (flags['min-percent'] < 0 || flags['min-percent'] > 100)) {
-      throw new SfError(messages.getMessage('invalidMinPercent'), 'InvalidVersionUsagePercent');
+      throw messages.createError('error.invalidMinPercent', [], [], 2);
     }
     const org = flags['target-org'];
     const connection = org.getConnection(flags['api-version']);
@@ -139,9 +150,7 @@ export default class FlowVersionList extends SfCommand<FlowVersionListCommandRep
       apiVersion: connection.getApiVersion(),
     };
     if (!this.jsonEnabled()) this.log(formatVersionListReport(report));
-    if (report.listTruncated || report.flows.some((flow) => flow.versions.some((row) => row.outcome === 'ERROR'))) {
-      process.exitCode = 1;
-    }
+    process.exitCode = listExitCode(report);
     return report;
   }
 }

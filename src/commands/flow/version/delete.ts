@@ -18,7 +18,7 @@ import { stripVTControlCharacters } from 'node:util';
 import { Messages, SfError } from '@salesforce/core';
 import {
   FlowVersionDeleteService,
-  ConnectToolingFlowVersionDeleteClient,
+  ConnectFlowVersionDeleteClient,
   FlowVersionError,
   type FlowVersionDeleteExecutionReport,
   type FlowVersionDeletePlan,
@@ -26,11 +26,17 @@ import {
 } from '@salesforce/flow-node';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { ConfirmationPrompt } from '../../../ux/confirmation.js';
+import { ConfirmationTimeoutError } from '../../../ux/confirmationTimeout.js';
+import {
+  projectNormalReport,
+  projectForceReport,
+  mutationExitCode,
+  type FlowVersionMutationReport,
+} from '../../../reporters/flowVersionMutationReport.js';
 import {
   assertForceDeleteTerminal,
   forceDeleteVersionNumber,
   runForceVersionDeletion,
-  type FlowVersionForceDeleteCommandReport,
 } from '../../../services/flowVersionForceDeletion.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -43,12 +49,19 @@ export type FlowVersionDeleteCommandReport = {
   apiVersion: string;
   dryRun: boolean;
   confirmed: boolean;
-  outcome: FlowVersionDeleteExecutionReport['outcome'] | 'PREVIEWED' | 'CANCELLED';
+  outcome: FlowVersionDeleteExecutionReport['outcome'] | 'PREVIEWED' | 'CANCELLED' | 'TIMED_OUT';
   plan: FlowVersionDeletePlan;
   deletion: FlowVersionDeleteExecutionReport | null;
 };
 
-type ArgumentFlag = { type: 'option' | 'boolean'; char?: string; aliases?: readonly string[] };
+export type FlowVersionDeleteCommandResult = FlowVersionMutationReport;
+
+type ArgumentFlag = {
+  type: 'option' | 'boolean';
+  char?: string;
+  aliases?: readonly string[];
+  charAliases?: readonly string[];
+};
 
 const normalizeVersionDeleteArgv = (argv: string[], flags: Record<string, ArgumentFlag>): string[] => {
   const bareOptions = new Set(['target-org', 'flow', 'versions', 'namespace', 'api-version']);
@@ -58,6 +71,7 @@ const normalizeVersionDeleteArgv = (argv: string[], flags: Record<string, Argume
     longFlags.set(name, flag);
     for (const alias of flag.aliases ?? []) longFlags.set(alias, flag);
     if (flag.char) shortFlags.set(flag.char, flag);
+    for (const alias of flag.charAliases ?? []) shortFlags.set(alias, flag);
   }
   const normalized: string[] = [];
   for (let index = 0; index < argv.length; index++) {
@@ -95,41 +109,51 @@ const terminalText = (value: unknown): string =>
   stripVTControlCharacters(String(value)).replace(/[\p{Cc}\p{Cf}]/gu, ' ');
 
 const sdkError = (error: unknown): never => {
-  if (error instanceof FlowVersionError) throw new SfError(error.message, error.code);
+  if (error instanceof FlowVersionError) {
+    const usageCodes = new Set(['INVALID_IDENTIFIER', 'INVALID_SELECTION', 'SELECTION_TOO_LARGE']);
+    throw new SfError(error.message, error.code, undefined, usageCodes.has(error.code) ? 2 : 1);
+  }
   throw error;
 };
 
-const assessmentDetails = (target: FlowVersionDeleteTarget): string[] => {
-  const lines: string[] = [];
-  if (target.error) {
-    lines.push(`    ${terminalText(target.error.code)}: ${terminalText(target.error.message)}`);
-  } else if (target.assessment && target.assessment.outcome !== 'PASS') {
-    lines.push(`    ${terminalText(target.assessment.message ?? target.assessment.reasonCode ?? 'Assessment error')}`);
-  }
-  for (const evidence of target.assessment?.evidence ?? []) {
-    const name = evidence.detailsRedacted ? 'Details unavailable' : evidence.sourceName ?? evidence.sourceId;
-    lines.push(`    Reference: ${terminalText(evidence.sourceType)} | ${terminalText(name)}`);
-  }
-  return lines;
+const reasonDetails = (code: string | null, message: string | null): string[] => {
+  if (code === null && message === null) return [];
+  const detail = code === null ? message! : message && message !== code ? `${code}: ${message}` : code;
+  return [`    ${terminalText(detail)}`];
 };
 
-export const formatVersionDeleteReport = (report: FlowVersionDeleteCommandReport): string => {
+const assessmentDetails = (target: FlowVersionDeleteTarget): string[] => {
+  if (target.error) return reasonDetails(target.error.code, target.error.message);
+  if (target.assessment && target.assessment.outcome !== 'PASS')
+    return reasonDetails(target.assessment.reasonCode, target.assessment.message);
+  return [];
+};
+
+const formattedFlowName = (plan: FlowVersionDeletePlan): string =>
+  plan.namespace ? `${terminalText(plan.namespace)}__${terminalText(plan.flowName)}` : terminalText(plan.flowName);
+
+export const formatVersionDeleteReport = (
+  report: FlowVersionDeleteCommandReport,
+  displayOutcome: string = report.outcome
+): string => {
   const lines = [
     '=== Flow version deletion',
     `Target org: ${terminalText(report.targetOrg)} | API: ${terminalText(report.apiVersion)} | Mode: NORMAL`,
-    `Flow: ${report.plan.namespace ? `${terminalText(report.plan.namespace)}__` : ''}${terminalText(
-      report.plan.flowName
-    )}`,
+    `Flow: ${formattedFlowName(report.plan)}`,
     `Definition: ${terminalText(report.plan.definitionId)}`,
     '',
     report.deletion ? '=== Results' : '=== Selected versions',
   ];
   if (report.deletion) {
     for (const result of report.deletion.results) {
-      lines.push(`  v${result.versionNumber} | ${terminalText(result.versionId ?? 'Not resolved')} | ${result.state}`);
-      if (result.source === 'CLIENT_POLICY')
-        lines.push('    Source: Client version-preservation safeguard (product policy pending)');
-      lines.push(...assessmentDetails(result));
+      const core = result.coreResult;
+      lines.push(
+        `  v${result.versionNumber} | ${terminalText(result.versionId ?? 'Not resolved')} | ${
+          core?.outcome ?? result.state
+        }`
+      );
+      if (result.source === 'CLIENT_POLICY') lines.push('    Source: Client policy');
+      lines.push(...(core ? reasonDetails(core.reasonCode, core.message) : assessmentDetails(result)));
     }
   } else {
     for (const version of report.plan.versions) {
@@ -142,7 +166,7 @@ export const formatVersionDeleteReport = (report: FlowVersionDeleteCommandReport
       lines.push(...assessmentDetails(version));
     }
   }
-  lines.push('', `Outcome: ${report.outcome}`);
+  lines.push('', `Outcome: ${displayOutcome}`);
   for (const warning of report.deletion?.warnings ?? report.plan.warnings) {
     lines.push(`Warning: ${terminalText(warning)}`);
   }
@@ -150,9 +174,7 @@ export const formatVersionDeleteReport = (report: FlowVersionDeleteCommandReport
   return `\n${lines.join('\n')}\n`;
 };
 
-export default class FlowVersionDelete extends SfCommand<
-  FlowVersionDeleteCommandReport | FlowVersionForceDeleteCommandReport
-> {
+export default class FlowVersionDelete extends SfCommand<FlowVersionDeleteCommandResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
@@ -162,14 +184,26 @@ export default class FlowVersionDelete extends SfCommand<
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
     flow: Flags.string({ char: 'f', required: true, summary: messages.getMessage('flags.flow.summary') }),
-    versions: Flags.string({ required: true, summary: messages.getMessage('flags.versions.summary') }),
+    versions: Flags.string({
+      required: true,
+      multiple: true,
+      multipleNonGreedy: true,
+      summary: messages.getMessage('flags.versions.summary'),
+    }),
     namespace: Flags.string({ summary: messages.getMessage('flags.namespace.summary') }),
     'dry-run': Flags.boolean({ default: false, summary: messages.getMessage('flags.dry-run.summary') }),
-    yes: Flags.boolean({ char: 'y', default: false, summary: messages.getMessage('flags.yes.summary') }),
+    'no-prompt': Flags.boolean({
+      char: 'p',
+      aliases: ['yes'],
+      charAliases: ['y'],
+      deprecateAliases: true,
+      default: false,
+      summary: messages.getMessage('flags.no-prompt.summary'),
+    }),
     force: Flags.boolean({ default: false, summary: messages.getMessage('flags.force.summary') }),
   };
 
-  public async run(): Promise<FlowVersionDeleteCommandReport | FlowVersionForceDeleteCommandReport> {
+  public async run(): Promise<FlowVersionDeleteCommandResult> {
     const { flags } = await this.parse(
       {
         flags: FlowVersionDelete.flags,
@@ -183,69 +217,85 @@ export default class FlowVersionDelete extends SfCommand<
         json: { type: 'boolean' },
       })
     );
+    const json = this.jsonEnabled();
+    const approved = flags['no-prompt'];
     if (flags.force) {
-      const versionNumber = forceDeleteVersionNumber(flags.versions);
-      const json = this.jsonEnabled();
-      assertForceDeleteTerminal(json, flags['dry-run']);
+      if (flags.versions.length !== 1) throw messages.createError('error.forceSingleVersion', [], [], 2);
+      const versionNumber = forceDeleteVersionNumber(flags.versions[0]);
+      assertForceDeleteTerminal(json);
       const org = flags['target-org'];
-      return runForceVersionDeletion({
+      const internalReport = await runForceVersionDeletion({
         connection: org.getConnection(flags['api-version']),
         targetOrg: org.getUsername() ?? 'authenticated org',
         flowName: flags.flow,
         versionNumber,
         namespace: flags.namespace,
         dryRun: flags['dry-run'],
-        yes: flags.yes,
+        yes: approved,
         json,
-        display: (message: string): void => (json ? this.logToStderr(message) : this.log(message)),
+        display: (message: string): void => this.log(message),
       });
+      const result = projectForceReport(internalReport);
+      process.exitCode = mutationExitCode(result);
+      return result;
     }
-    if (!flags['dry-run'] && !flags.yes && (this.jsonEnabled() || !process.stdin.isTTY)) {
-      throw new SfError(messages.getMessage('confirmationRequired'), 'ConfirmationRequired');
-    }
+    const canPrompt = !json && process.stdin.isTTY === true && process.stdout.isTTY === true;
+    const dryRun = flags['dry-run'] || (!approved && !canPrompt);
     const org = flags['target-org'];
     const connection = org.getConnection(flags['api-version']);
-    const service = new FlowVersionDeleteService(new ConnectToolingFlowVersionDeleteClient(connection));
+    const service = new FlowVersionDeleteService(new ConnectFlowVersionDeleteClient(connection));
     const plan = await service
-      .plan({ flowName: flags.flow, versions: flags.versions, namespace: flags.namespace })
+      .plan(
+        { flowName: flags.flow, versions: flags.versions.join(','), namespace: flags.namespace },
+        { preview: dryRun }
+      )
       .catch(sdkError);
     const report: FlowVersionDeleteCommandReport = {
       contractVersion: '2',
       mode: 'NORMAL',
       targetOrg: org.getUsername() ?? 'authenticated org',
       apiVersion: connection.getApiVersion(),
-      dryRun: flags['dry-run'],
+      dryRun,
       confirmed: false,
       outcome: 'PREVIEWED',
       plan,
       deletion: null,
     };
+    const finish = (): FlowVersionMutationReport => {
+      const result = projectNormalReport(report);
+      process.exitCode = mutationExitCode(result);
+      return result;
+    };
     if (report.dryRun) {
-      if (!this.jsonEnabled()) this.log(formatVersionDeleteReport(report));
-      return report;
+      if (!json) this.log(formatVersionDeleteReport(report));
+      return finish();
     }
-    if (!flags.yes) {
+    if (!approved) {
       this.log(formatVersionDeleteReport(report));
-      const confirmed = await new ConfirmationPrompt().confirm({
-        message: messages.getMessage('confirmDelete', [plan.versions.length, report.targetOrg]),
-        ms: 60_000,
-        defaultAnswer: false,
-      });
+      let confirmed: boolean;
+      try {
+        confirmed = await new ConfirmationPrompt().confirm({
+          message: messages.getMessage('confirmDelete', [plan.versions.length, report.targetOrg]),
+          ms: 60_000,
+          defaultAnswer: false,
+        });
+      } catch (error) {
+        if (!(error instanceof ConfirmationTimeoutError)) throw error;
+        report.outcome = 'TIMED_OUT';
+        this.log(messages.getMessage('confirmationTimedOut'));
+        return finish();
+      }
       if (!confirmed) {
         report.outcome = 'CANCELLED';
         this.log(messages.getMessage('cancelled'));
-        return report;
+        return finish();
       }
     }
     report.confirmed = true;
     report.deletion = await service.execute(plan).catch(sdkError);
     report.outcome = report.deletion.outcome;
-    if (report.deletion.results.some((result) => ['FAILED', 'UNKNOWN', 'NOT_ATTEMPTED'].includes(result.state))) {
-      process.exitCode = 2;
-    } else if (report.deletion.results.some((result) => result.state === 'BLOCKED')) {
-      process.exitCode = 1;
-    }
-    if (!this.jsonEnabled()) this.log(formatVersionDeleteReport(report));
-    return report;
+    const result = finish();
+    if (!json) this.log(formatVersionDeleteReport(report, result.outcome));
+    return result;
   }
 }

@@ -19,6 +19,7 @@ import Ajv from 'ajv';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { Org } from '@salesforce/core';
+import { FlowVersionError } from '@salesforce/flow-node';
 import { stubSfCommandUx } from '@salesforce/sf-plugins-core';
 import FlowVersionPrune, {
   formatVersionPruneReport,
@@ -30,6 +31,7 @@ import {
   type RetentionExecution,
 } from '../../../../src/services/flowVersionRetention.js';
 import { ConfirmationPrompt } from '../../../../src/ux/confirmation.js';
+import { ConfirmationTimeoutError } from '../../../../src/ux/confirmationTimeout.js';
 
 const validateReport = new Ajv({ allErrors: true }).compile(
   JSON.parse(readFileSync(new URL('../../../../schemas/flow-version-prune.json', import.meta.url), 'utf8')) as object
@@ -82,12 +84,28 @@ const execution = (plan: RetentionPlan): RetentionExecution => ({
     namespace: null,
     versionNumber: row.versionNumber,
     status: row.status,
-    assessment: { versionId: row.versionId, outcome: 'PASS', reasonCode: null, message: null, evidence: [] },
+    assessment: null,
     error: null,
     state: 'SUCCEEDED',
     targetDeleted: true,
-    source: 'TOOLING',
+    source: 'CORE',
+    coreResult: { versionId: row.versionId, outcome: 'DELETED', reasonCode: null, message: null, evidence: [] },
   })),
+});
+
+const internalReport = (
+  plan: RetentionPlan,
+  deletion: RetentionExecution | null = null
+): FlowVersionPruneCommandReport => ({
+  contractVersion: '1',
+  mode: 'RETENTION',
+  targetOrg: 'unit@example.com',
+  apiVersion: '67.0',
+  dryRun: deletion === null,
+  confirmed: deletion !== null,
+  outcome: deletion?.outcome ?? 'PREVIEWED',
+  plan,
+  deletion,
 });
 
 describe('flow version prune command', () => {
@@ -102,11 +120,15 @@ describe('flow version prune command', () => {
   let logJson: sinon.SinonStub;
   let getConnection: sinon.SinonStub;
   let originalExitCode: typeof process.exitCode;
-  let originalTTY: PropertyDescriptor | undefined;
-  const interactive = (value: boolean): void => {
-    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value });
+  let originalInputTTY: PropertyDescriptor | undefined;
+  let originalOutputTTY: PropertyDescriptor | undefined;
+  const signals = ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK'] as const;
+  let originalSignalListeners: Map<(typeof signals)[number], NodeJS.SignalsListener[]>;
+  const interactive = (input: boolean, output = input): void => {
+    Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: input });
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: output });
   };
-  const error = async (commandArgs: string[]): Promise<unknown> => {
+  const error = async (commandArgs: string[]): Promise<Error & { exitCode?: number }> => {
     let caught: unknown;
     try {
       await FlowVersionPrune.run(commandArgs);
@@ -114,13 +136,15 @@ describe('flow version prune command', () => {
       caught = item;
     }
     expect(caught).to.be.instanceOf(Error);
-    return caught;
+    return caught as Error & { exitCode?: number };
   };
 
   beforeEach(() => {
     originalExitCode = process.exitCode;
     process.exitCode = undefined;
-    originalTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    originalInputTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    originalOutputTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
+    originalSignalListeners = new Map(signals.map((signal) => [signal, process.listeners(signal)]));
     interactive(false);
     plan = fixture();
     deletion = execution(plan);
@@ -137,16 +161,35 @@ describe('flow version prune command', () => {
   afterEach(() => {
     sandbox.restore();
     process.exitCode = originalExitCode;
-    if (originalTTY) Object.defineProperty(process.stdin, 'isTTY', originalTTY);
+    if (originalInputTTY) Object.defineProperty(process.stdin, 'isTTY', originalInputTTY);
     else Reflect.deleteProperty(process.stdin, 'isTTY');
+    if (originalOutputTTY) Object.defineProperty(process.stdout, 'isTTY', originalOutputTTY);
+    else Reflect.deleteProperty(process.stdout, 'isTTY');
+    // Static command runs install framework signal listeners; keep each test's process state isolated.
+    for (const signal of signals) {
+      for (const listener of process.listeners(signal)) {
+        if (!originalSignalListeners.get(signal)?.includes(listener)) process.removeListener(signal, listener);
+      }
+    }
   });
 
   it('defaults to preview with PRD defaults and performs no confirmation or execution', async () => {
     const result = await FlowVersionPrune.run(args);
     expect(planStub.firstCall.args).to.deep.equal([{ flowName: 'Invoice' }, { keepLatest: 5, olderThanDays: 90 }]);
-    expect(result).to.include({ dryRun: true, confirmed: false, outcome: 'PREVIEWED', deletion: null });
+    expect(result).to.include({ contractVersion: '3', dryRun: true, confirmed: false, outcome: 'previewed' });
+    expect(result).not.to.have.any.keys('plan', 'deletion');
+    expect(result.summary).to.include({ succeeded: 0, wouldDelete: 1 });
+    expect(result.results[0]).to.include({ action: 'delete', outcome: null, versionNumber: 1 });
     expect(confirm.called || execute.called).to.equal(false);
     expect(String(log.firstCall.args[0])).to.include('No deletion requests were sent.');
+    expect(process.exitCode).to.equal(0);
+  });
+
+  it('keeps default preview even in an interactive terminal', async () => {
+    interactive(true);
+    const result = await FlowVersionPrune.run(args);
+    expect(result.dryRun).to.equal(true);
+    expect(confirm.called || execute.called).to.equal(false);
   });
 
   it('returns JSON preview without human output even in noninteractive mode', async () => {
@@ -162,7 +205,7 @@ describe('flow version prune command', () => {
     expect(planStub.firstCall.args).to.deep.equal([{ all: true }, { keepLatest: 7, olderThanDays: 45 }]);
   });
 
-  it('uses the installed C1 client and consumes the later page before protecting latest and rollback versions', async () => {
+  it('uses the installed C1 client and consumes later pages before protecting latest and rollback versions', async () => {
     planStub.restore();
     const base = fixture().flows[0].versions[0];
     const makeRow = (n: number, status: string, changed: string | null): object => {
@@ -203,50 +246,85 @@ describe('flow version prune command', () => {
     });
     const result = await FlowVersionPrune.run([...args, '--keep-latest', '1', '--older-than', '0d', '--json']);
     expect(request.callCount).to.equal(2);
-    expect(result.plan.flows[0].versions.map((item) => item.disposition)).to.deep.equal([
-      'CANDIDATE',
-      'CANDIDATE',
-      'KEPT',
-      'KEPT',
-    ]);
+    expect(result.results.map((item) => item.action)).to.deep.equal(['delete', 'delete', 'keep', 'keep']);
+    expect(result.summary).to.include({ kept: 2, wouldDelete: 2, succeeded: 0 });
     for (const call of request.getCalls()) {
       const req = call.args[0] as { method: string; url: string; body: string };
       const body = JSON.parse(req.body) as Record<string, unknown>;
       expect(req).to.include({ method: 'POST', url: '/connect/interaction/flow-versions/list' });
-      expect(body).not.to.have.property('status');
-      expect(body).not.to.have.property('olderThanDays');
-      expect(body).not.to.have.property('deletable');
+      expect(body).not.to.have.any.keys('status', 'olderThanDays', 'deletable');
     }
     expect(JSON.parse((request.secondCall.args[0] as { body: string }).body)).to.include({ offset: 100 });
     expect(execute.called || confirm.called).to.equal(false);
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
   });
 
-  it('requires exactly one scope and rejects conflicting execution options before planning', async () => {
-    await error(['-o', 'source']);
+  it('requires exactly one scope before planning', async () => {
+    expect((await error(['-o', 'source'])).exitCode).to.equal(2);
     await error([...args, '--all']);
-    for (const flags of [
-      ['--yes', '--dry-run'],
-      ['--execute', '--dry-run'],
-      ['--execute', '--yes'],
-    ]) {
-      // eslint-disable-next-line no-await-in-loop -- Command tests share process state and must run sequentially.
-      await error([...args, ...flags]);
-    }
     expect(planStub.called || execute.called).to.equal(false);
   });
 
-  it('validates policy options before planning', async () => {
-    await error([...args, '--keep-latest', '0']);
-    await error([...args, '--older-than', '90']);
+  it('classifies invalid retention values as usage errors before planning', async () => {
+    expect((await error([...args, '--keep-latest', '0'])).exitCode).to.equal(2);
+    expect((await error([...args, '--older-than', '90'])).exitCode).to.equal(2);
     expect(planStub.called).to.equal(false);
   });
 
-  it('rejects noninteractive and JSON --execute without silently falling back to deletion', async () => {
-    await error([...args, '--execute']);
+  it('does not classify a runtime inventory error as invalid usage', async () => {
+    planStub.rejects(new FlowVersionError('INVALID_INVENTORY', 'The returned inventory is incomplete.'));
+    expect((await error(args)).exitCode).to.equal(1);
+    expect(execute.called).to.equal(false);
+  });
+
+  it('turns noninteractive --execute into an actual preview instead of requesting deletion', async () => {
+    const result = await FlowVersionPrune.run([...args, '--execute']);
+    expect(result).to.include({ dryRun: true, outcome: 'previewed', confirmed: false });
+    expect(planStub.calledOnce).to.equal(true);
+    expect(execute.called || confirm.called).to.equal(false);
+  });
+
+  it('turns JSON --execute into preview even when input and output are interactive', async () => {
     interactive(true);
-    await error([...args, '--execute', '--json']);
-    expect(planStub.called || execute.called || confirm.called).to.equal(false);
+    const result = await FlowVersionPrune.run([...args, '--execute', '--json']);
+    expect(result.dryRun).to.equal(true);
+    expect(log.called || confirm.called || execute.called).to.equal(false);
+    expect(logJson.calledOnce).to.equal(true);
+  });
+
+  it('does not prompt when stdout is redirected', async () => {
+    interactive(true, false);
+    const result = await FlowVersionPrune.run([...args, '--execute']);
+    expect(result.dryRun).to.equal(true);
+    expect(confirm.called || execute.called).to.equal(false);
+  });
+
+  for (const approval of ['--no-prompt', '-p', '--yes', '-y']) {
+    it(`executes exact approved candidates with ${approval} in JSON/noninteractive mode`, async () => {
+      const result = await FlowVersionPrune.run([...args, approval, '--json']);
+      expect(confirm.called || log.called).to.equal(false);
+      expect(execute.calledOnceWithExactly(plan)).to.equal(true);
+      expect(result).to.include({ outcome: 'succeeded', dryRun: false, confirmed: true });
+      expect(result.summary).to.include({ succeeded: 1, wouldDelete: 0 });
+      expect(result.results[0]).to.include({ outcome: 'succeeded', versionNumber: 1 });
+      expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
+      expect(process.exitCode).to.equal(0);
+    });
+  }
+
+  for (const approval of ['--no-prompt', '--yes', '--execute']) {
+    it(`makes explicit --dry-run win over ${approval}`, async () => {
+      const result = await FlowVersionPrune.run([...args, approval, '--dry-run', '--json']);
+      expect(result).to.include({ dryRun: true, confirmed: false, outcome: 'previewed' });
+      expect(execute.called || confirm.called).to.equal(false);
+      expect(process.exitCode).to.equal(0);
+    });
+  }
+
+  it('allows explicit no-prompt approval together with --execute without prompting', async () => {
+    await FlowVersionPrune.run([...args, '--execute', '--no-prompt']);
+    expect(execute.calledOnceWithExactly(plan)).to.equal(true);
+    expect(confirm.called).to.equal(false);
   });
 
   it('displays the complete plan and allows one minute, default no, for interactive confirmation', async () => {
@@ -254,8 +332,20 @@ describe('flow version prune command', () => {
     const result = await FlowVersionPrune.run([...args, '--execute']);
     expect(log.calledBefore(confirm)).to.equal(true);
     expect(confirm.firstCall.args[0]).to.include({ ms: 60_000, defaultAnswer: false });
-    expect(result).to.include({ outcome: 'CANCELLED', confirmed: false, deletion: null });
+    expect(result).to.include({ outcome: 'cancelled', confirmed: false });
+    expect(result.summary.succeeded).to.equal(0);
     expect(execute.called).to.equal(false);
+    expect(process.exitCode).to.equal(1);
+  });
+
+  it('reports an actual confirmation timeout separately and exits 69 without mutation', async () => {
+    interactive(true);
+    confirm.rejects(new ConfirmationTimeoutError());
+    const result = await FlowVersionPrune.run([...args, '--execute']);
+    expect(result).to.include({ outcome: 'timed_out', confirmed: false, dryRun: false });
+    expect(execute.called).to.equal(false);
+    expect(process.exitCode).to.equal(69);
+    expect(log.lastCall.args[0]).to.include('timed out');
   });
 
   it('executes only after explicit interactive approval', async () => {
@@ -264,66 +354,110 @@ describe('flow version prune command', () => {
     const result = await FlowVersionPrune.run([...args, '--execute']);
     expect(execute.calledOnceWithExactly(plan)).to.equal(true);
     expect(confirm.calledBefore(execute)).to.equal(true);
-    expect(result).to.include({ outcome: 'SUCCEEDED', confirmed: true, dryRun: false });
+    expect(result).to.include({ outcome: 'succeeded', confirmed: true, dryRun: false });
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
   });
 
-  it('executes exact planned targets with --yes and no prompt in JSON/noninteractive mode', async () => {
-    const result = await FlowVersionPrune.run([...args, '--yes', '--json']);
-    expect(confirm.called || log.called).to.equal(false);
-    expect(execute.calledOnceWithExactly(plan)).to.equal(true);
-    expect(result.deletion).to.equal(deletion);
-    expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
-  });
-
-  it('keeps completed preview exit zero even when it displays backend blocked/error rows', async () => {
+  it('keeps completed preview exit zero when it displays backend blocked or errored rows', async () => {
     Object.assign(plan.flows[0].versions[0], {
       disposition: 'ERROR',
       outcome: 'ERROR',
       deletable: false,
       reasonCode: 'OPERATIONAL',
+      message: 'Assessment failed.',
+      reasons: [{ code: 'OPERATIONAL', message: 'Assessment failed.' }],
     });
     const result = await FlowVersionPrune.run(args);
-    expect(result.outcome).to.equal('PREVIEWED');
-    expect(process.exitCode).not.to.equal(1);
-    expect(process.exitCode).not.to.equal(2);
+    expect(result.outcome).to.equal('previewed');
+    expect(result.results[0]).to.include({ action: 'error', outcome: null });
+    expect(result.summary.succeeded).to.equal(0);
+    expect(process.exitCode).to.equal(0);
   });
 
-  it('returns exit 1 for a blocker, and 2 for a failed or uncertain execution', async () => {
+  it('uses exit 1 for wholly blocked, failed and uncertain execution without treating errors as usage', async () => {
     Object.assign(deletion.results[0], {
       state: 'BLOCKED',
       targetDeleted: false,
-      error: { code: 'ACTIVE_VERSION', message: 'ACTIVE_VERSION' },
+      error: { code: 'ACTIVE_VERSION', message: 'The active version cannot be deleted.' },
+      coreResult: {
+        versionId: deletion.results[0].versionId,
+        outcome: 'BLOCKED',
+        reasonCode: 'ACTIVE_VERSION',
+        message: 'The active version cannot be deleted.',
+        evidence: [],
+      },
     });
-    await FlowVersionPrune.run([...args, '--yes']);
+    const blocked = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(blocked.outcome).to.equal('blocked');
+    expect(blocked.results[0].blockingReasons[0].code).to.equal('ACTIVE_VERSION');
     expect(process.exitCode).to.equal(1);
-    Object.assign(deletion.results[0], { state: 'FAILED' });
-    await FlowVersionPrune.run([...args, '--yes']);
-    expect(process.exitCode).to.equal(2);
-    Object.assign(deletion.results[0], { state: 'UNKNOWN', targetDeleted: null });
-    await FlowVersionPrune.run([...args, '--yes']);
-    expect(process.exitCode).to.equal(2);
+    Object.assign(deletion.results[0], {
+      state: 'FAILED',
+      error: { code: 'DELETE_ERROR', message: 'The version could not be deleted.' },
+      coreResult: {
+        versionId: deletion.results[0].versionId,
+        outcome: 'ERROR',
+        reasonCode: 'DELETE_ERROR',
+        message: 'The version could not be deleted.',
+        evidence: [],
+      },
+    });
+    const failed = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(failed.results[0].outcome).to.equal('failed');
+    expect(process.exitCode).to.equal(1);
+    Object.assign(deletion.results[0], { state: 'UNKNOWN', targetDeleted: null, coreResult: null });
+    const unknown = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(unknown.outcome).to.equal('unknown');
+    expect(unknown.results[0].outcome).to.equal('unknown');
+    expect(process.exitCode).to.equal(1);
   });
 
-  it('aligns overall outcome and exit code for blocked or errored rows outside the candidate set', async () => {
+  it('renders an already-deleted Core acknowledgement as success while preserving its reason', async () => {
+    Object.assign(deletion.results[0].coreResult!, {
+      reasonCode: 'ALREADY_DELETED',
+      message: 'This version is already deleted.',
+    });
+    const result = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(log.lastCall.args[0]).to.include('Invoice v1 | DELETED');
+    expect(log.lastCall.args[0]).to.include('ALREADY_DELETED: This version is already deleted.');
+    expect(result.outcome).to.equal('succeeded');
+    expect(result.results[0]).to.include({
+      reasonCode: 'ALREADY_DELETED',
+      message: 'This version is already deleted.',
+    });
+    expect(result.results[0].blockingReasons).to.deep.equal([]);
+    expect(process.exitCode).to.equal(0);
+  });
+
+  it('includes relevant blocked and errored planned rows even when there are no execution candidates', async () => {
     deletion.results = [];
     Object.assign(plan.flows[0].versions[0], {
       disposition: 'BLOCKED',
       outcome: 'BLOCKED',
       deletable: false,
-      reasonCode: 'PAUSED_INTERVIEWS',
-      message: 'PAUSED_INTERVIEWS (1)',
+      reasonCode: 'HAS_INTERVIEWS',
+      message: 'HAS_INTERVIEWS (1)',
+      reasons: [{ code: 'HAS_INTERVIEWS', message: 'HAS_INTERVIEWS (1)' }],
     });
-    const blocked = await FlowVersionPrune.run([...args, '--yes']);
-    expect(blocked.outcome).to.equal('FAILED');
+    const blocked = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(blocked.outcome).to.equal('blocked');
+    expect(blocked.summary).to.include({ blocked: 1, succeeded: 0 });
+    expect(blocked.results[0].blockingReasons[0]).to.include({ code: 'HAS_INTERVIEWS', count: null });
+    expect(confirm.called).to.equal(false);
     expect(process.exitCode).to.equal(1);
-    Object.assign(plan.flows[0].versions[0], { disposition: 'ERROR', outcome: 'ERROR', reasonCode: 'OPERATIONAL' });
-    const failed = await FlowVersionPrune.run([...args, '--yes']);
-    expect(failed.outcome).to.equal('FAILED');
-    expect(process.exitCode).to.equal(2);
+    Object.assign(plan.flows[0].versions[0], {
+      disposition: 'ERROR',
+      outcome: 'ERROR',
+      reasonCode: 'OPERATIONAL',
+      message: 'Assessment failed.',
+      reasons: [{ code: 'OPERATIONAL', message: 'Assessment failed.' }],
+    });
+    const failed = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(failed.outcome).to.equal('failed');
+    expect(process.exitCode).to.equal(1);
   });
 
-  it('reports PARTIAL when a candidate succeeds but another retention-eligible row was blocked at preview', async () => {
+  it('reports partial success as 68 without dropping results from nonzero JSON output', async () => {
     plan.flows[0].versions.push({
       ...plan.flows[0].versions[0],
       versionId: '301000000000002AAA',
@@ -331,16 +465,22 @@ describe('flow version prune command', () => {
       disposition: 'BLOCKED',
       outcome: 'BLOCKED',
       deletable: false,
-      reasonCode: 'PAUSED_INTERVIEWS',
-      message: 'PAUSED_INTERVIEWS (1)',
+      reasonCode: 'HAS_INTERVIEWS',
+      message: 'HAS_INTERVIEWS (1)',
+      reasons: [{ code: 'HAS_INTERVIEWS', message: 'HAS_INTERVIEWS (1)' }],
     });
-    const result = await FlowVersionPrune.run([...args, '--yes']);
-    expect(result.outcome).to.equal('PARTIAL');
-    expect(process.exitCode).to.equal(1);
-    expect(result.deletion?.outcome).to.equal('SUCCEEDED');
+    const result = await FlowVersionPrune.run([...args, '--no-prompt', '--json']);
+    expect(result.outcome).to.equal('partial');
+    expect(result.summary).to.include({ succeeded: 1, blocked: 1 });
+    expect(result.results.map((row) => row.outcome)).to.deep.equal(['succeeded', 'blocked']);
+    expect(process.exitCode).to.equal(68);
+    const envelope = logJson.firstCall.args[0] as { status: number; result: unknown };
+    expect(envelope.status).to.equal(68);
+    expect(envelope.result).to.deep.equal(result);
+    expect(String(log.lastCall?.args[0] ?? '')).not.to.include('FAILED');
   });
 
-  it('does not fail cleanup for a young protected row whose backend assessment is ERROR', async () => {
+  it('does not count protected rows as successes or failures when Core eligibility is unavailable', async () => {
     Object.assign(plan.flows[0].versions[0], {
       ageDays: 2,
       disposition: 'KEPT',
@@ -350,14 +490,15 @@ describe('flow version prune command', () => {
       reasons: [{ code: 'AGE_THRESHOLD', message: 'Keep younger versions.' }],
     });
     deletion.results = [];
-    const result = await FlowVersionPrune.run([...args, '--yes']);
-    expect(result.outcome).to.equal('SUCCEEDED');
+    const result = await FlowVersionPrune.run([...args, '--no-prompt']);
+    expect(result.outcome).to.equal('succeeded');
+    expect(result.summary).to.include({ succeeded: 0, failed: 0, blocked: 0, kept: 1 });
+    expect(result.results[0]).to.include({ action: 'keep', outcome: null });
     expect(process.exitCode).to.equal(0);
-    expect(result.plan.flows[0].versions[0].outcome).to.equal('ERROR');
   });
 
-  it('sanitizes controls in console output while leaving structured data unchanged', async () => {
-    const result = await FlowVersionPrune.run(args);
+  it('sanitizes controls in console formatting while leaving structured report data unchanged', () => {
+    const result = internalReport(plan);
     result.targetOrg = '\u001b[31morg\u001b[0m\u202e\nspoof';
     const output = formatVersionPruneReport(result);
     expect(output).not.to.include('\u001b');
@@ -366,11 +507,13 @@ describe('flow version prune command', () => {
     expect(result.targetOrg).to.include('\u001b');
   });
 
-  it('enforces stable JSON version and no unexpected report properties', async () => {
-    const result: FlowVersionPruneCommandReport = await FlowVersionPrune.run(args);
+  it('enforces the shared JSON contract version and excludes internal and unexpected report properties', async () => {
+    const result = await FlowVersionPrune.run(args);
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
     expect(validateReport({ ...result, contractVersion: '2' })).to.equal(false);
     expect(validateReport({ ...result, fakeCounts: [] })).to.equal(false);
-    expect(validateReport({ ...result, dryRun: false })).to.equal(false);
+    expect(result).not.to.have.any.keys('plan', 'deletion');
+    expect(result.summary.succeeded).to.equal(0);
+    expect(result.results.every((row) => row.outcome === null)).to.equal(true);
   });
 });

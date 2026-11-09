@@ -1,116 +1,196 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "FlowVersionListCommandReport",
-  "description": "C1 version list from the Core Connect list contract, with authenticated CLI scope metadata. Counts, limits and outcomes are server values.",
-  "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "contractVersion",
-    "orgId",
-    "generatedAt",
-    "targetOrg",
-    "apiVersion",
-    "scope",
-    "filters",
-    "versionLimit",
-    "returnedVersionCount",
-    "candidateVersionCount",
-    "listTruncated",
-    "catalogComplete",
-    "nextOffset",
-    "flows"
-  ],
-  "properties": {
-    "contractVersion": {
-      "const": "1"
-    },
-    "orgId": {
-      "type": "string",
-      "pattern": "^00D[A-Za-z0-9]{15}$"
-    },
-    "generatedAt": {
-      "type": "string",
-      "format": "date-time"
-    },
-    "targetOrg": {
-      "type": "string"
-    },
-    "apiVersion": {
-      "type": "string"
-    },
-    "scope": {
+  "$ref": "#/definitions/FlowVersionListCommandReport",
+  "definitions": {
+    "FlowVersionListCommandReport": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["all", "flowName", "namespace", "allNamespaces"],
       "properties": {
-        "all": {
-          "type": "boolean"
+        "targetOrg": {
+          "type": "string"
         },
-        "flowName": {
-          "type": ["string", "null"]
+        "apiVersion": {
+          "type": "string"
         },
-        "namespace": {
+        "contractVersion": {
+          "type": "string",
+          "const": "1"
+        },
+        "orgId": {
+          "type": "string"
+        },
+        "generatedAt": {
+          "type": "string"
+        },
+        "scope": {
+          "type": "object",
+          "properties": {
+            "all": {
+              "type": "boolean"
+            },
+            "flowName": {
+              "type": ["string", "null"]
+            },
+            "namespace": {
+              "type": ["string", "null"]
+            },
+            "allNamespaces": {
+              "type": "boolean"
+            }
+          },
+          "required": ["all", "flowName", "namespace", "allNamespaces"],
+          "additionalProperties": false
+        },
+        "filters": {
+          "type": "object",
+          "properties": {
+            "status": {
+              "type": ["string", "null"]
+            },
+            "olderThan": {
+              "type": ["string", "null"]
+            },
+            "minPercent": {
+              "type": ["number", "null"]
+            },
+            "deletable": {
+              "type": "boolean"
+            }
+          },
+          "required": ["status", "olderThan", "minPercent", "deletable"],
+          "additionalProperties": false
+        },
+        "versionLimit": {
+          "type": "number"
+        },
+        "returnedVersionCount": {
+          "type": "number",
+          "description": "Actual number of merged output versions, after an optional inactive compatibility filter."
+        },
+        "candidateVersionCount": {
+          "type": "number",
+          "description": "Largest server candidate-prefix count observed; not an all-org version total."
+        },
+        "listTruncated": {
+          "type": "boolean",
+          "description": "True if any server page reported a truncated catalog, even after continuation is exhausted."
+        },
+        "catalogComplete": {
+          "type": "boolean",
+          "description": "Complete, unfiltered scope reconciled against the terminal page and every Flow count."
+        },
+        "nextOffset": {
           "type": "null"
         },
-        "allNamespaces": {
-          "type": "boolean"
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectFlowVersionListFlow"
+          }
         }
-      }
+      },
+      "required": [
+        "apiVersion",
+        "candidateVersionCount",
+        "catalogComplete",
+        "contractVersion",
+        "filters",
+        "flows",
+        "generatedAt",
+        "listTruncated",
+        "nextOffset",
+        "orgId",
+        "returnedVersionCount",
+        "scope",
+        "targetOrg",
+        "versionLimit"
+      ]
     },
-    "filters": {
+    "ConnectFlowVersionListFlow": {
       "type": "object",
-      "additionalProperties": false,
-      "required": ["status", "olderThan", "minPercent", "deletable"],
       "properties": {
+        "definitionId": {
+          "type": "string"
+        },
+        "apiName": {
+          "type": "string"
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "versionCount": {
+          "type": ["number", "null"]
+        },
+        "limitPercent": {
+          "type": ["number", "null"]
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/ConnectFlowVersionListVersion"
+          }
+        }
+      },
+      "required": ["definitionId", "apiName", "label", "versionCount", "limitPercent", "versions"],
+      "additionalProperties": false
+    },
+    "ConnectFlowVersionListVersion": {
+      "type": "object",
+      "properties": {
+        "versionId": {
+          "type": "string"
+        },
+        "versionNumber": {
+          "type": "number"
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
         "status": {
           "type": ["string", "null"]
         },
-        "olderThan": {
+        "createdDate": {
           "type": ["string", "null"]
         },
-        "minPercent": {
-          "type": ["integer", "null"],
-          "minimum": 0,
-          "maximum": 100
+        "ageDays": {
+          "type": ["number", "null"]
+        },
+        "createdById": {
+          "type": ["string", "null"]
+        },
+        "createdByName": {
+          "type": ["string", "null"]
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"]
+        },
+        "statusChangeDate": {
+          "type": ["string", "null"],
+          "description": "Omitted by older servers; null means Core has no stored status-change time."
+        },
+        "referenceCount": {
+          "type": ["number", "null"]
+        },
+        "pausedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "failedInterviewCount": {
+          "type": ["number", "null"]
         },
         "deletable": {
           "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
         }
-      }
-    },
-    "versionLimit": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "returnedVersionCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "candidateVersionCount": {
-      "type": "integer",
-      "minimum": 0
-    },
-    "listTruncated": {
-      "type": "boolean"
-    },
-    "catalogComplete": {
-      "type": "boolean",
-      "description": "True only for an unfiltered, fully paged catalog whose terminal page and whole-Flow counts prove completeness."
-    },
-    "nextOffset": {
-      "type": "null"
-    },
-    "flows": {
-      "type": "array",
-      "items": {
-        "$ref": "#/definitions/Flow"
-      }
-    }
-  },
-  "definitions": {
-    "Version": {
-      "type": "object",
-      "additionalProperties": false,
+      },
       "required": [
         "versionId",
         "versionNumber",
@@ -129,215 +209,8 @@
         "reasonCode",
         "message"
       ],
-      "properties": {
-        "versionId": {
-          "type": "string",
-          "pattern": "^301[A-Za-z0-9]{15}$"
-        },
-        "versionNumber": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "versionName": {
-          "type": ["string", "null"]
-        },
-        "status": {
-          "type": ["string", "null"]
-        },
-        "createdDate": {
-          "type": ["string", "null"],
-          "format": "date-time"
-        },
-        "ageDays": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
-        "createdById": {
-          "anyOf": [
-            {
-              "type": "string",
-              "pattern": "^005[A-Za-z0-9]{15}$"
-            },
-            {
-              "type": "null"
-            }
-          ]
-        },
-        "createdByName": {
-          "type": ["string", "null"]
-        },
-        "lastModifiedDate": {
-          "type": ["string", "null"],
-          "format": "date-time"
-        },
-        "statusChangeDate": {
-          "type": ["string", "null"],
-          "format": "date-time",
-          "description": "Stored UTC status-change timestamp; null means no stored value. Omitted by older Core builds."
-        },
-        "referenceCount": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
-        "pausedInterviewCount": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
-        "failedInterviewCount": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
-        "deletable": {
-          "type": "boolean"
-        },
-        "outcome": {
-          "enum": ["PASS", "BLOCKED", "ERROR"]
-        },
-        "reasonCode": {
-          "type": ["string", "null"]
-        },
-        "message": {
-          "type": ["string", "null"]
-        }
-      },
-      "allOf": [
-        {
-          "if": {
-            "properties": {
-              "outcome": {
-                "const": "PASS"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "deletable": {
-                "const": true
-              },
-              "reasonCode": {
-                "type": "null"
-              },
-              "message": {
-                "type": "null"
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "outcome": {
-                "enum": ["BLOCKED", "ERROR"]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "deletable": {
-                "const": false
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "outcome": {
-                "enum": ["PASS", "BLOCKED"]
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "referenceCount": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "pausedInterviewCount": {
-                "type": "integer",
-                "minimum": 0
-              },
-              "failedInterviewCount": {
-                "type": "integer",
-                "minimum": 0
-              }
-            }
-          }
-        },
-        {
-          "if": {
-            "properties": {
-              "outcome": {
-                "const": "BLOCKED"
-              }
-            }
-          },
-          "then": {
-            "properties": {
-              "message": {
-                "type": "string",
-                "minLength": 1
-              }
-            }
-          }
-        }
-      ]
-    },
-    "Flow": {
-      "type": "object",
       "additionalProperties": false,
-      "required": ["definitionId", "apiName", "label", "versionCount", "limitPercent", "versions"],
-      "properties": {
-        "definitionId": {
-          "type": "string",
-          "pattern": "^300[A-Za-z0-9]{15}$"
-        },
-        "apiName": {
-          "type": "string",
-          "minLength": 1
-        },
-        "label": {
-          "type": ["string", "null"]
-        },
-        "versionCount": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
-        "limitPercent": {
-          "type": ["integer", "null"],
-          "minimum": 0
-        },
-        "versions": {
-          "type": "array",
-          "items": {
-            "$ref": "#/definitions/Version"
-          }
-        }
-      }
+      "description": "Values returned by Core, without inferred blockers, references or interview counts."
     }
-  },
-  "allOf": [
-    {
-      "if": {
-        "properties": {
-          "versionLimit": {
-            "const": 0
-          }
-        }
-      },
-      "then": {
-        "properties": {
-          "flows": {
-            "items": {
-              "properties": {
-                "limitPercent": {
-                  "type": "null"
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-  ]
+  }
 }

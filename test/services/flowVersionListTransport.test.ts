@@ -18,58 +18,72 @@ import { PassThrough } from 'node:stream';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { Connection, type AuthInfo } from '@salesforce/core';
-import { FlowVersionError, FlowVersionListService, ToolingFlowVersionListClient } from '@salesforce/flow-node';
+import { ConnectFlowVersionListClient, FlowVersionError, type FlowVersionListInput } from '@salesforce/flow-node';
 
+const definitionId = '300000000000001AAA';
+const creatorId = '005000000000001AAA';
 const versionId = (number: number): string => `301${String(number).padStart(12, '0')}AAA`;
-const record = (number: number): Record<string, unknown> => ({
-  Id: versionId(number),
-  DefinitionId: '300000000000001AAA',
-  Definition: { DeveloperName: 'Invoice_Approval', NamespacePrefix: null },
-  MasterLabel: 'Invoice Approval - Review',
-  VersionNumber: number,
-  Status: number === 1 ? 'Active' : 'Draft',
-  CreatedDate: '2026-01-01T00:00:00.000+0000',
-  CreatedById: '005000000000001AAA',
-  CreatedBy: { Name: 'Fixture Creator' },
-  LastModifiedDate: '2026-01-02T00:00:00.000+0000',
+const row = (number = 1, changes: Record<string, unknown> = {}): Record<string, unknown> => ({
+  versionId: versionId(number).slice(0, 15),
+  versionNumber: number,
+  versionName: 'Invoice Approval',
+  status: 'Draft',
+  createdDate: '2026-10-01T12:00:00Z',
+  lastModifiedDate: '2026-10-02T12:00:00Z',
+  statusChangeDate: '2026-09-01T12:00:00Z',
+  ageDays: 26,
+  createdById: creatorId.slice(0, 15),
+  createdByName: 'Flow Author',
+  referenceCount: 0,
+  pausedInterviewCount: 0,
+  failedInterviewCount: 0,
+  deletable: true,
+  outcome: 'PASS',
+  reasonCode: null,
+  message: null,
+  ...changes,
 });
-type NativeRequest = { method: string; url: string; body?: unknown; headers?: Record<string, string> };
-const capturedRequest = (call: sinon.SinonSpyCall): NativeRequest => call.args[0] as NativeRequest;
-const assessmentPath = '/services/data/v67.0/connect/interaction/flow-versions/deletion-assessment';
-const requestBody = (request: NativeRequest): string => {
-  if (request.body === undefined || request.body === null) return '{}';
-  if (typeof request.body !== 'string') throw new TypeError('Expected a serialized JSON request body.');
-  return request.body;
-};
-const incomingInterview = {
-  sourceId: '0Fo000000000001',
-  sourceType: 'FlowInterview',
-  sourceName: '00000003',
-  targetKind: 'VERSION',
-  targetId: versionId(2).slice(0, 15),
-  targetName: null,
-  channels: ['EXTERNALIZED_REFERENCE'],
-  interviewRoles: ['PERSISTED_REFERENCE'],
-  detailsRedacted: false,
-};
+const page = (
+  versions = [row()],
+  changes: Record<string, unknown> = {},
+  flowChanges: Record<string, unknown> = {}
+): Record<string, unknown> => ({
+  contractVersion: '1',
+  versionLimit: 50,
+  returnedVersionCount: versions.length,
+  candidateVersionCount: versions.length,
+  listTruncated: false,
+  nextOffset: null,
+  flows: versions.length
+    ? [
+        {
+          definitionId: definitionId.slice(0, 15),
+          apiName: 'Invoice_Approval',
+          label: 'Invoice Approval',
+          versionCount: versions.length,
+          limitPercent: versions.length * 2,
+          versions,
+          ...flowChanges,
+        },
+      ]
+    : [],
+  ...changes,
+});
+type NativeRequest = { method: string; url: string; body?: string; headers?: Record<string, string> };
+type Reply = { statusCode: number; body: unknown };
+const success = (body: Record<string, unknown>): Reply => ({ statusCode: 201, body });
+const requestBody = (request: NativeRequest): Record<string, unknown> =>
+  JSON.parse(request.body ?? '{}') as Record<string, unknown>;
 
-describe('Flow version listing through the installed authenticated Connection', () => {
+// Native parsing and authorization headers are exercised without network or org access.
+describe('C1 Core list through the installed authenticated Connection', () => {
   const sandbox = sinon.createSandbox();
   afterEach(() => sandbox.restore());
 
-  const connectionWithResponses = async (
-    responses: Array<{ statusCode: number; body: unknown }>,
-    facts: {
-      assessments?: Record<string, Record<string, unknown>>;
-      assessmentFailure?: { statusCode: number; body: unknown };
-      omitCounts?: boolean;
-      omitVersionLimit?: boolean;
-      versionLimit?: number;
-    } = {}
-  ): Promise<{ connection: Connection; request: sinon.SinonStub }> => {
+  const setup = async (replies: Reply[]) => {
     const connection = new Connection({
       authInfo: {
-        getUsername: () => 'unit-test-only@example.invalid',
+        getUsername: () => 'c1-unit-only@example.invalid',
         getFields: () => ({ orgId: '00D000000000001EAA' }),
       } as AuthInfo,
       connectionOptions: {
@@ -79,35 +93,10 @@ describe('Flow version listing through the installed authenticated Connection', 
       },
     });
     await connection.init();
-    // Mock below native parsing/authentication. No request reaches a real org.
     // eslint-disable-next-line no-underscore-dangle
-    const request = sandbox.stub(connection._transport, 'httpRequest').callsFake((httpRequest: NativeRequest) => {
-      const url = new URL(httpRequest.url);
-      let response: { statusCode: number; body: unknown } | undefined;
-      if (url.pathname === assessmentPath) {
-        const body = JSON.parse(requestBody(httpRequest)) as { targets: Array<{ versionId: string }> };
-        response = facts.assessmentFailure ?? {
-          statusCode: 201,
-          body: {
-            contractVersion: '1',
-            results: body.targets.map((target) => ({
-              versionId: target.versionId.slice(0, 15),
-              outcome: 'PASS',
-              reasonCode: null,
-              message: null,
-              evidence: [],
-              ...(facts.omitCounts
-                ? {}
-                : { counts: { referenceCount: 0, pausedInterviewCount: 0, failedInterviewCount: 0 } }),
-              ...(facts.omitVersionLimit ? {} : { versionLimit: facts.versionLimit ?? 25 }),
-              ...(facts.assessments?.[target.versionId.slice(0, 15)] ?? {}),
-            })),
-          },
-        };
-      } else {
-        response = responses.shift();
-      }
-      if (!response) throw new Error('Unexpected additional HTTP request');
+    const request = sandbox.stub(connection._transport, 'httpRequest').callsFake(() => {
+      const response = replies.shift();
+      if (!response) throw new Error('Unexpected additional native request');
       return Object.assign(
         Promise.resolve({
           statusCode: response.statusCode,
@@ -117,363 +106,252 @@ describe('Flow version listing through the installed authenticated Connection', 
         { stream: () => new PassThrough() }
       );
     });
-    return { connection, request };
+    return { connection, request, client: new ConnectFlowVersionListClient(connection) };
   };
 
-  const assessmentCalls = (request: sinon.SinonStub): NativeRequest[] =>
-    request
-      .getCalls()
-      .map(capturedRequest)
-      .filter((call) => new URL(call.url).pathname === assessmentPath);
-
-  const expectOnlyReadAndAssessmentRequests = (request: sinon.SinonStub): void => {
+  const expectOnlyList = (request: sinon.SinonStub): void => {
     for (const call of request.getCalls()) {
-      const input = capturedRequest(call);
-      expect(['GET', 'POST']).to.include(input.method);
-      if (input.method === 'POST') expect(new URL(input.url).pathname).to.equal(assessmentPath);
-      expect(JSON.stringify(input.headers ?? {}).toLowerCase()).not.to.include('uitier');
-      expect(JSON.stringify(input.headers ?? {}).toLowerCase()).not.to.include('lightning');
-      expect(new URL(input.url).pathname).not.to.include('/describe');
-      const query = new URL(input.url).searchParams.get('q') ?? '';
-      for (const obsoleteRead of ['FlowInterview', 'MetadataComponentDependency', 'ManageableState'])
-        expect(query).not.to.include(obsoleteRead);
+      const input = call.args[0] as NativeRequest;
+      expect(input.method).to.equal('POST');
+      expect(input.url).to.equal(
+        'https://flow-list-unit-test.invalid/services/data/v67.0/connect/interaction/flow-versions/list'
+      );
+      expect(input.headers?.Authorization).to.equal('Bearer unit-test-only-not-a-credential');
+      expect(JSON.stringify(input.headers ?? {}).toLowerCase()).not.to.match(/uitier|lightning/);
+      expect(input.body).not.to.match(/orgId|userId|SOQL|force|skip|targets|expectedDefinitionId/);
+      expect(call.args[1]).to.include({ followRedirect: false });
+      expect((call.args[1] as { retry: unknown }).retry).to.deep.equal({ methods: [], maxRetries: 0 });
     }
   };
 
-  it('pages native inventory, then accepts HTTP 201 and canonicalizes the backend 15-character result', async () => {
-    const { connection, request } = await connectionWithResponses([
-      {
-        statusCode: 200,
-        body: {
-          totalSize: 2,
-          done: false,
-          nextRecordsUrl: '/services/data/v67.0/tooling/query/01g000000000001AAA',
-          records: [record(1)],
-        },
-      },
-      { statusCode: 200, body: { totalSize: 2, done: true, records: [record(2)] } },
-    ]);
-    const report = await new FlowVersionListService(
-      new ToolingFlowVersionListClient(connection),
-      () => new Date('2026-10-27T00:00:00.000Z')
-    ).list({ all: true, status: 'inactive' });
-    expect(report).to.include({ contractVersion: '6', totalVersions: 2, matchedVersions: 1 });
-    expect(report.rows[0]).to.include({
-      versionNumber: 2,
-      versionCount: 2,
-      versionLimit: 25,
-      percentUsed: 8,
-      createdByName: 'Fixture Creator',
-      versionName: 'Invoice Approval - Review',
-    });
-    expect(report.rows[0].c1Counts).to.deep.equal({
-      referenceCount: 0,
-      pausedInterviewCount: 0,
-      failedInterviewCount: 0,
-    });
-    expect(report.rows[0].assessment).to.deep.equal({
-      versionId: versionId(2),
-      outcome: 'PASS',
-      reasonCode: null,
-      message: null,
-      evidence: [],
-      counts: { referenceCount: 0, pausedInterviewCount: 0, failedInterviewCount: 0 },
-      versionLimit: 25,
-    });
-    expect(report.assessmentCounts).to.deep.equal({ pass: 1, blocked: 0, error: 0 });
-    expect(report.assessmentErrors).to.deep.equal([]);
-    expect(report.countErrors).to.deep.equal([]);
-    expect(report.capacityErrors).to.deep.equal([]);
-    expect(report.warnings).to.deep.equal([]);
-    const posts = assessmentCalls(request);
-    expect(posts).to.have.length(1);
-    expect(JSON.parse(requestBody(posts[0]))).to.deep.equal({
-      contractVersion: '1',
-      targets: [{ versionId: versionId(2), expectedDefinitionId: '300000000000001AAA' }],
-    });
-    const inventory = request
-      .getCalls()
-      .map(capturedRequest)
-      .find((call) => new URL(call.url).searchParams.get('q')?.includes('CreatedBy.Name'));
-    expect(inventory).not.to.equal(undefined);
-    expect(inventory?.url).not.to.include('Metadata');
-    expect(new URL(inventory?.url ?? '').searchParams.get('q')).to.include('MasterLabel');
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('uses complete structured backend counts without inferring totals from the blocker message or evidence', async () => {
-    const message = 'PAUSED_INTERVIEWS (2); REFERENCED_BY_VERSION (ParentFlow, OtherFlow)';
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 2, done: true, records: [record(1), record(2)] } }],
-      {
-        assessments: {
-          [versionId(2).slice(0, 15)]: {
-            outcome: 'BLOCKED',
-            reasonCode: 'PAUSED_INTERVIEWS',
-            message,
-            evidence: [incomingInterview],
-            counts: { referenceCount: 5, pausedInterviewCount: 2, failedInterviewCount: 3 },
-          },
-        },
-      }
-    );
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
-    const draft = report.rows.find((row) => row.versionNumber === 2);
-    expect(draft?.c1Counts).to.deep.equal({ referenceCount: 5, pausedInterviewCount: 2, failedInterviewCount: 3 });
-    expect(draft?.assessment).to.include({ outcome: 'BLOCKED', reasonCode: 'PAUSED_INTERVIEWS', message });
-    expect(draft?.assessment.evidence[0]).to.include({
-      sourceId: '0Fo000000000001CAA',
-      targetId: versionId(2),
-      targetName: null,
-    });
-    expect(draft?.assessment.evidence[0].interviewRoles).to.deep.equal(['PERSISTED_REFERENCE']);
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('retains one per-item ERROR while --deletable still returns the other backend PASS result', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 2, done: true, records: [record(1), record(2)] } }],
-      {
-        assessments: {
-          [versionId(1).slice(0, 15)]: {
-            outcome: 'ERROR',
-            reasonCode: 'OWNED_RESOURCE_CHECK_INCOMPLETE',
-            message: null,
-            evidence: [],
-          },
-        },
-      }
-    );
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({
-      all: true,
-      deletable: true,
-    });
-    expect(report.rows).to.have.length(1);
-    expect(report.rows[0].versionNumber).to.equal(2);
-    expect(report.rows[0].assessment.outcome).to.equal('PASS');
-    expect(report.assessmentErrors).to.have.length(1);
-    expect(report.assessmentErrors[0].versionNumber).to.equal(1);
-    expect(report.assessmentErrors[0].assessment).to.include({
-      outcome: 'ERROR',
-      reasonCode: 'OWNED_RESOURCE_CHECK_INCOMPLETE',
-      message: null,
-    });
-    expect(report.assessmentCounts).to.deep.equal({ pass: 1, blocked: 0, error: 1 });
-    expect(report.assessmentErrors[0].c1Counts).to.equal(null);
-    expect(report.assessmentErrors[0].countError).to.equal(null);
-    expect(report.countErrors).to.deep.equal([]);
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('does not override backend PASS with local status, last-version or count rules', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 1, done: true, records: [record(1)] } }],
-      {
-        assessments: {
-          [versionId(1).slice(0, 15)]: {
-            counts: { referenceCount: 3, pausedInterviewCount: 9, failedInterviewCount: 2 },
-          },
-        },
-      }
-    );
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({
-      all: true,
-      deletable: true,
-    });
-    expect(report.rows).to.have.length(1);
-    expect(report.rows[0]).to.include({
-      status: 'Active',
-      versionCount: 1,
-    });
-    expect(report.rows[0].c1Counts).to.deep.equal({
-      referenceCount: 3,
-      pausedInterviewCount: 9,
-      failedInterviewCount: 2,
-    });
-    expect(report.rows[0].assessment.outcome).to.equal('PASS');
-    expect(report.rows[0]).not.to.have.property('blockingReasons');
-    expect(report.rows[0]).not.to.have.property('deletability');
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('retains missing C1 counts as a report error instead of inventing zero or counting evidence', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 1, done: true, records: [record(2)] } }],
-      { omitCounts: true }
-    );
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
-    expect(report.rows[0].assessment.outcome).to.equal('PASS');
-    expect(report.rows[0].c1Counts).to.equal(null);
-    expect(report.rows[0].countError?.code).to.equal('C1_COUNTS_UNAVAILABLE');
-    expect(report.countErrors).to.have.length(1);
-    expect(report.rows[0]).not.to.have.property('referenceCount');
-    expect(report.rows[0]).not.to.have.property('pausedInterviewCount');
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('uses the backend configured limit rather than a fixed denominator for the utilization filter', async () => {
-    await Promise.all(
-      [25, 100].map(async (limit) => {
-        const { connection, request } = await connectionWithResponses(
-          [{ statusCode: 200, body: { totalSize: 2, done: true, records: [record(1), record(2)] } }],
-          { versionLimit: limit }
-        );
-        const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({
-          all: true,
-          minPercent: 5,
-        });
-        expect(report.rows).to.have.length(limit === 25 ? 2 : 0);
-        for (const row of report.rows) {
-          expect(row.versionLimit).to.equal(limit);
-          expect(row.percentUsed).to.equal(8);
-        }
-        expect(report.capacityErrors).to.deep.equal([]);
-        expect(assessmentCalls(request)).to.have.length(1);
-        expectOnlyReadAndAssessmentRequests(request);
-      })
-    );
-  });
-
-  it('retains unavailable configured limits as errors instead of treating them as matching a usage filter', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 1, done: true, records: [record(2)] } }],
-      { omitVersionLimit: true }
-    );
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({
-      all: true,
-      minPercent: 80,
-    });
-    expect(report.rows).to.have.length(0);
-    expect(report.capacityErrors).to.have.length(1);
-    expect(report.capacityErrors[0]).to.include({ versionLimit: null, percentUsed: null });
-    expect(report.capacityErrors[0].capacityError?.code).to.equal('VERSION_LIMIT_UNAVAILABLE');
-    expect(report.capacityErrors[0].assessment.outcome).to.equal('PASS');
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('preserves a new server reason and future evidence channel without adding a CLI product branch', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 1, done: true, records: [record(2)] } }],
-      {
-        assessments: {
-          [versionId(2).slice(0, 15)]: {
-            outcome: 'BLOCKED',
-            reasonCode: 'FUTURE_SERVER_RULE',
-            message: 'A new backend reason; keep this exact text.',
-            evidence: [{ ...incomingInterview, channels: ['ACTIVE_VERSION', 'FUTURE_CHANNEL'] }],
-          },
-        },
-      }
-    );
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
-    expect(report.rows[0].assessment).to.include({
-      reasonCode: 'FUTURE_SERVER_RULE',
-      message: 'A new backend reason; keep this exact text.',
-    });
-    expect(report.rows[0].assessment.evidence[0].channels).to.deep.equal(['ACTIVE_VERSION', 'FUTURE_CHANNEL']);
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('submits 101 targets as bounded independent batches with no identity, bypass or UI headers', async () => {
-    const records = Array.from({ length: 101 }, (_, index) => record(index + 1));
-    const { connection, request } = await connectionWithResponses([
-      { statusCode: 200, body: { totalSize: 101, done: true, records } },
-    ]);
-    const report = await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
-    expect(report.rows).to.have.length(101);
-    expect(report.assessmentCounts.pass).to.equal(101);
-    const posts = assessmentCalls(request);
-    expect(posts.map((call) => (JSON.parse(requestBody(call)) as { targets: unknown[] }).targets.length)).to.deep.equal(
-      [100, 1]
-    );
-    for (const call of posts) {
-      const body = JSON.parse(requestBody(call)) as {
-        contractVersion: string;
-        targets: Array<Record<string, unknown>>;
-      };
-      expect(Object.keys(body).sort()).to.deep.equal(['contractVersion', 'targets']);
-      expect(body.contractVersion).to.equal('1');
-      for (const target of body.targets)
-        expect(Object.keys(target).sort()).to.deep.equal(['expectedDefinitionId', 'versionId']);
-    }
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('propagates a native HTTP 400 assessment rejection without a positive fallback or DELETE', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 1, done: true, records: [record(2)] } }],
-      {
-        assessmentFailure: {
-          statusCode: 400,
-          body: [{ errorCode: 'BAD_REQUEST', message: 'contractVersion must be "1"' }],
-        },
-      }
-    );
+  const rejected = async (
+    client: ConnectFlowVersionListClient,
+    input: FlowVersionListInput = { all: true }
+  ): Promise<FlowVersionError> => {
     let caught: unknown;
     try {
-      await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).to.be.instanceOf(Error);
-    expect(caught).to.have.property('code', 'BAD_REQUEST');
-    expect((caught as Error).message).to.include('contractVersion must be "1"');
-    expect(assessmentCalls(request)).to.have.length(1);
-    expectOnlyReadAndAssessmentRequests(request);
-  });
-
-  it('returns a safe typed inventory permission error before submitting any assessment', async () => {
-    const { connection, request } = await connectionWithResponses([
-      {
-        statusCode: 403,
-        body: [{ errorCode: 'INSUFFICIENT_ACCESS_OR_READONLY', message: 'Fixture denies Flow access.' }],
-      },
-    ]);
-    let caught: unknown;
-    try {
-      await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
+      await client.list(input);
     } catch (error) {
       caught = error;
     }
     expect(caught).to.be.instanceOf(FlowVersionError);
-    expect((caught as FlowVersionError).code).to.equal('INVENTORY_REQUEST_FAILED');
-    expect((caught as Error).message).to.include('INSUFFICIENT_ACCESS_OR_READONLY');
-    expect((caught as Error).message).not.to.include('Fixture denies Flow access');
-    expect(assessmentCalls(request)).to.have.length(0);
-  });
+    return caught as FlowVersionError;
+  };
 
-  it('propagates an HTTP 503 assessment failure instead of manufacturing per-item outcomes or retrying', async () => {
-    const { connection, request } = await connectionWithResponses(
-      [{ statusCode: 200, body: { totalSize: 1, done: true, records: [record(2)] } }],
-      {
-        assessmentFailure: {
-          statusCode: 503,
-          body: [{ errorCode: 'SERVER_UNAVAILABLE', message: 'Assessment service temporarily unavailable.' }],
-        },
-      }
+  it('accepts native HTTP 201 and canonicalizes Core version, definition and creator IDs', async () => {
+    const { client, request } = await setup([success(page())]);
+    const report = await client.list({ flowName: 'Invoice_Approval' });
+    expect(report).to.include({
+      contractVersion: '1',
+      returnedVersionCount: 1,
+      versionLimit: 50,
+      catalogComplete: true,
+    });
+    expect(report.flows[0].definitionId).to.equal(definitionId);
+    expect(report.flows[0].versions[0]).to.include({
+      versionId: versionId(1),
+      createdById: creatorId,
+      createdByName: 'Flow Author',
+    });
+    expect(requestBody(request.firstCall.args[0] as NativeRequest)).to.deep.equal({
+      contractVersion: '1',
+      flowApiName: 'Invoice_Approval',
+      limit: 100,
+      offset: 0,
+    });
+    const headers = (request.firstCall.args[0] as NativeRequest).headers ?? {};
+    expect(Object.entries(headers).find(([key]) => key.toLowerCase() === 'content-type')?.[1]).to.equal(
+      'application/json'
     );
-    let caught: unknown;
-    try {
-      await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({ all: true });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).to.be.instanceOf(Error);
-    expect(assessmentCalls(request)).to.have.length(1);
-    expectOnlyReadAndAssessmentRequests(request);
+    expectOnlyList(request);
   });
 
-  it('rejects an unsafe selector before native HTTP', async () => {
-    const { connection, request } = await connectionWithResponses([]);
-    let caught: unknown;
-    try {
-      await new FlowVersionListService(new ToolingFlowVersionListClient(connection)).list({
-        flowName: "Invoice' OR Id != null",
-      });
-    } catch (error) {
-      caught = error;
-    }
-    expect(caught).to.be.instanceOf(Error);
+  it('merges Core pages using opaque nextOffset without Tooling or assessment calls', async () => {
+    const { client, request } = await setup([
+      success(page([row(1)], { candidateVersionCount: 3, nextOffset: 73 }, { versionCount: 3, limitPercent: 6 })),
+      success(page([row(2), row(3)], { candidateVersionCount: 3 }, { versionCount: 3, limitPercent: 6 })),
+    ]);
+    const report = await client.list({ all: true });
+    expect(report.returnedVersionCount).to.equal(3);
+    expect(report.catalogComplete).to.equal(true);
+    expect(report.flows[0].versions.map((version) => version.versionNumber)).to.deep.equal([1, 2, 3]);
+    expect(request.getCalls().map((call) => requestBody(call.args[0] as NativeRequest).offset)).to.deep.equal([0, 73]);
+    expectOnlyList(request);
+  });
+
+  it('forwards scope and filters to Core without computing counts or filtering by local capacity', async () => {
+    const { client, request } = await setup([
+      success(page([row()], { versionLimit: 25 }, { versionCount: 20, limitPercent: 80 })),
+    ]);
+    const report = await client.list({
+      all: true,
+      status: 'oBsolete',
+      olderThan: '090d',
+      deletable: true,
+      minPercent: 80,
+    });
+    expect(requestBody(request.firstCall.args[0] as NativeRequest)).to.deep.equal({
+      contractVersion: '1',
+      status: 'Obsolete',
+      olderThanDays: 90,
+      deletable: true,
+      minLimitPercent: 80,
+      limit: 100,
+      offset: 0,
+    });
+    expect(report.flows[0]).to.include({ versionCount: 20, limitPercent: 80 });
+    expect(report.versionLimit).to.equal(25);
+    expectOnlyList(request);
+  });
+
+  it('keeps authoritative counts and status-change time independent of message text and last-modified', async () => {
+    const { client, request } = await setup([
+      success(
+        page([
+          row(1, {
+            outcome: 'BLOCKED',
+            deletable: false,
+            reasonCode: 'INTERVIEWS',
+            message: 'INTERVIEWS (99)',
+            referenceCount: 5,
+            pausedInterviewCount: 2,
+            failedInterviewCount: 3,
+          }),
+        ])
+      ),
+    ]);
+    const report = await client.list({ all: true });
+    expect(report.flows[0].versions[0]).to.include({
+      referenceCount: 5,
+      pausedInterviewCount: 2,
+      failedInterviewCount: 3,
+      reasonCode: 'INTERVIEWS',
+      message: 'INTERVIEWS (99)',
+      statusChangeDate: '2026-09-01T12:00:00Z',
+      lastModifiedDate: '2026-10-02T12:00:00Z',
+    });
+    expect(report.flows[0].versions[0]).not.to.have.property('assessment');
+    expect(report.flows[0].versions[0]).not.to.have.property('evidence');
+    expectOnlyList(request);
+  });
+
+  it('retains PASS, BLOCKED and ERROR independently, including nullable unavailable metadata', async () => {
+    const { client, request } = await setup([
+      success(
+        page([
+          row(1),
+          row(2, {
+            status: 'Active',
+            outcome: 'BLOCKED',
+            deletable: false,
+            reasonCode: 'ACTIVE_VERSION',
+            message: 'The active version cannot be deleted.',
+          }),
+          row(3, {
+            status: null,
+            ageDays: null,
+            outcome: 'ERROR',
+            deletable: false,
+            reasonCode: 'OPERATIONAL',
+            message: null,
+            createdDate: null,
+            lastModifiedDate: null,
+            statusChangeDate: null,
+            createdById: null,
+            createdByName: null,
+            referenceCount: null,
+            pausedInterviewCount: null,
+            failedInterviewCount: null,
+          }),
+        ])
+      ),
+    ]);
+    const versions = (await client.list({ all: true })).flows[0].versions;
+    expect(versions.map((version) => version.outcome)).to.deep.equal(['PASS', 'BLOCKED', 'ERROR']);
+    expect(versions[2]).to.include({
+      referenceCount: null,
+      pausedInterviewCount: null,
+      failedInterviewCount: null,
+      statusChangeDate: null,
+    });
+    expectOnlyList(request);
+  });
+
+  it('preserves future Core blocker reasons and messages without a client product branch', async () => {
+    const { client, request } = await setup([
+      success(
+        page([
+          row(1, { outcome: 'BLOCKED', deletable: false, reasonCode: 'FUTURE_RULE', message: 'New server policy.' }),
+        ])
+      ),
+    ]);
+    const version = (await client.list({ all: true })).flows[0].versions[0];
+    expect(version).to.include({ reasonCode: 'FUTURE_RULE', message: 'New server policy.' });
+    expectOnlyList(request);
+  });
+
+  it('retains terminal truncation and does not certify an incomplete catalog', async () => {
+    const { client, request } = await setup([
+      success(
+        page([row()], { listTruncated: true, candidateVersionCount: 2000 }, { versionCount: 2001, limitPercent: 4002 })
+      ),
+    ]);
+    const report = await client.list({ all: true });
+    expect(report.listTruncated).to.equal(true);
+    expect(report.catalogComplete).to.equal(false);
+    expectOnlyList(request);
+  });
+
+  it('supports the inactive compatibility filter without inventing a server status', async () => {
+    const { client, request } = await setup([
+      success(page([row(1, { status: 'Active' }), row(2, { status: 'Obsolete' })])),
+    ]);
+    const report = await client.list({ all: true, status: 'inactive' });
+    expect(report.flows[0].versions.map((version) => version.versionNumber)).to.deep.equal([2]);
+    expect(requestBody(request.firstCall.args[0] as NativeRequest)).not.to.have.property('status');
+    expect(report.catalogComplete).to.equal(false);
+    expectOnlyList(request);
+  });
+
+  for (const [name, changes] of [
+    ['non-advancing continuation', { nextOffset: 0 }],
+    ['contradictory row count', { returnedVersionCount: 2 }],
+    ['unsupported contract', { contractVersion: '2' }],
+  ] as Array<[string, Record<string, unknown>]>) {
+    it(`rejects ${name} instead of manufacturing list results`, async () => {
+      const { client, request } = await setup([success(page([row()], changes))]);
+      expect((await rejected(client)).code).to.equal('INVALID_LIST_RESPONSE');
+      expect(request.calledOnce).to.equal(true);
+      expectOnlyList(request);
+    });
+  }
+
+  it('rejects duplicate versions across pages', async () => {
+    const { client, request } = await setup([
+      success(page([row()], { candidateVersionCount: 2, nextOffset: 1 }, { versionCount: 2, limitPercent: 4 })),
+      success(page([row()], { candidateVersionCount: 2 }, { versionCount: 2, limitPercent: 4 })),
+    ]);
+    expect((await rejected(client)).code).to.equal('LIST_CHANGED');
+    expect(request.callCount).to.equal(2);
+    expectOnlyList(request);
+  });
+
+  for (const statusCode of [400, 403, 503]) {
+    it(`preserves a native HTTP ${statusCode} failure and sends no automatic retry`, async () => {
+      const { client, request } = await setup([
+        { statusCode, body: [{ errorCode: 'SERVER_REJECTION', message: 'The server rejected this list request.' }] },
+      ]);
+      const error = await rejected(client);
+      expect(error.code).to.equal('SERVER_REJECTION');
+      expect(error.message).to.equal('The server rejected this list request.');
+      expect(request.calledOnce).to.equal(true);
+      expectOnlyList(request);
+    });
+  }
+
+  it('rejects unsafe selectors before native HTTP', async () => {
+    const { client, request } = await setup([]);
+    expect((await rejected(client, { flowName: "Invoice' OR Id != null" })).code).to.equal('INVALID_IDENTIFIER');
     expect(request.called).to.equal(false);
   });
 });

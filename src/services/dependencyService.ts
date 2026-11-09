@@ -14,8 +14,13 @@
  * limitations under the License.
  */
 
+import { Messages } from '@salesforce/core';
+
+Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
+const messages = Messages.loadMessages('@salesforce/plugin-flow', 'flow.dependencies');
+
 export type ToolingQueryClient = {
-  query<T>(soql: string): Promise<{ records: T[]; totalSize?: number; done?: boolean }>;
+  query<T extends Record<string, unknown>>(soql: string): Promise<{ records: T[]; totalSize?: number; done?: boolean }>;
 };
 
 export type AnalyzeOptions = {
@@ -113,6 +118,40 @@ const MCD_FIELDS: Array<keyof MetadataDependencyEdge> = [
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const SAFE_QUERY_ERROR_CODES = new Set([
+  'INVALID_SESSION_ID',
+  'INSUFFICIENT_ACCESS',
+  'INSUFFICIENT_ACCESS_OR_READONLY',
+  'API_DISABLED_FOR_ORG',
+  'REQUEST_LIMIT_EXCEEDED',
+  'INVALID_TYPE',
+  'INVALID_FIELD',
+  'MALFORMED_QUERY',
+  'NOT_FOUND',
+  'SERVICE_UNAVAILABLE',
+  'ETIMEDOUT',
+  'ECONNRESET',
+  'ENOTFOUND',
+  'ECONNREFUSED',
+  'EHOSTUNREACH',
+  'EPIPE',
+]);
+
+// Native diagnostics can contain auth headers, URLs, SOQL, HTML or nested causes.
+// Keep only known codes and numeric HTTP status; never preserve the raw exception.
+function safeQueryDiagnostics(error: unknown): string {
+  const candidate: unknown = Array.isArray(error) ? error[0] : error;
+  if (!isRecord(candidate)) return '';
+  const code = candidate.errorCode ?? candidate.code ?? candidate.name;
+  const status = candidate.statusCode ?? candidate.status;
+  const details: string[] = [];
+  if (typeof code === 'string' && SAFE_QUERY_ERROR_CODES.has(code)) details.push(code);
+  if (typeof status === 'number' && Number.isInteger(status) && status >= 100 && status <= 599) {
+    details.push(`HTTP ${status}`);
+  }
+  return details.length > 0 ? ` (${details.join('; ')})` : '';
+}
 
 const qualifiedName = (name: string, namespace: string | null): string => (namespace ? `${namespace}__${name}` : name);
 
@@ -249,6 +288,17 @@ export class DependencyService {
     };
   }
 
+  private async requiredQuery<T extends Record<string, unknown>>(
+    soql: string,
+    flowName: string
+  ): Promise<{ records: T[]; totalSize?: number; done?: boolean }> {
+    try {
+      return await this.client.query<T>(soql);
+    } catch (error) {
+      throw messages.createError('error.flowReadFailed', [flowName, safeQueryDiagnostics(error)]);
+    }
+  }
+
   private async readFlow(
     flowName: string,
     namespace: string | null,
@@ -256,9 +306,10 @@ export class DependencyService {
   ): Promise<ReadFlow> {
     const name = qualifiedName(flowName, namespace);
     const namespacePredicate = namespace ? soqlLiteral(namespace) : 'null';
-    const definitions = await this.client.query<FlowDefinitionRecord>(
+    const definitions = await this.requiredQuery<FlowDefinitionRecord>(
       'SELECT Id, DeveloperName, NamespacePrefix, ActiveVersionId, LatestVersionId FROM FlowDefinition ' +
-        `WHERE DeveloperName = ${soqlLiteral(flowName)} AND NamespacePrefix = ${namespacePredicate} LIMIT 2`
+        `WHERE DeveloperName = ${soqlLiteral(flowName)} AND NamespacePrefix = ${namespacePredicate} LIMIT 2`,
+      name
     );
     if (definitions.records.length === 0)
       throw new Error(`Flow definition ${name} was not found or is not accessible.`);
@@ -270,8 +321,9 @@ export class DependencyService {
     const selectedId = versionPolicy === 'active' ? definition.ActiveVersionId : definition.LatestVersionId;
     if (!selectedId) throw new Error(`Flow ${name} has no ${versionPolicy} version; no fallback version was selected.`);
     const versionId = validateId(selectedId, `Flow ${name} ${versionPolicy} version`);
-    const versions = await this.client.query<FlowVersionRecord>(
-      `SELECT Id, DefinitionId, VersionNumber, Status, Metadata FROM Flow WHERE Id = ${soqlLiteral(versionId)} LIMIT 1`
+    const versions = await this.requiredQuery<FlowVersionRecord>(
+      `SELECT Id, DefinitionId, VersionNumber, Status, Metadata FROM Flow WHERE Id = ${soqlLiteral(versionId)} LIMIT 1`,
+      name
     );
     if (versions.records.length !== 1 || (versions.totalSize ?? 1) > 1 || versions.done === false) {
       throw new Error(`The selected ${versionPolicy} version for Flow ${name} was not readable as a single record.`);
@@ -353,8 +405,9 @@ export class DependencyService {
           }
         } catch (error) {
           incomplete = true;
-          const message = error instanceof Error ? error.message : String(error);
-          warnings.push(`MetadataComponentDependency ${direction} query for ${id} failed: ${message}`);
+          warnings.push(
+            messages.getMessage('warning.dependencyQueryFailed', [direction, id, safeQueryDiagnostics(error)])
+          );
         }
       }
     }

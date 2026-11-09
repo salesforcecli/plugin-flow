@@ -34,8 +34,13 @@ import FlowVersionDelete, {
   type FlowVersionDeleteCommandReport,
 } from '../../../../src/commands/flow/version/delete.js';
 import { ConfirmationPrompt } from '../../../../src/ux/confirmation.js';
+import { ConfirmationTimeoutError } from '../../../../src/ux/confirmationTimeout.js';
+import {
+  projectNormalReport,
+  type FlowVersionMutationReport,
+} from '../../../../src/reporters/flowVersionMutationReport.js';
 
-const runNormal = async (args: string[]): Promise<FlowVersionDeleteCommandReport> => {
+const runNormal = async (args: string[]): Promise<FlowVersionMutationReport> => {
   const result = await FlowVersionDelete.run(args);
   if (result.mode !== 'NORMAL') throw new Error('A normal deletion command routed to force mode.');
   return result;
@@ -87,7 +92,11 @@ const deletionFixture = (plan: FlowVersionDeletePlan): FlowVersionDeleteExecutio
     ...version,
     state: 'SUCCEEDED',
     targetDeleted: true,
-    source: 'TOOLING',
+    source: 'CORE',
+    coreResult:
+      version.versionId === null
+        ? null
+        : { versionId: version.versionId, outcome: 'DELETED', reasonCode: null, message: null, evidence: [] },
     error: null,
   })),
   warnings: [],
@@ -140,9 +149,11 @@ describe('flow version delete command', () => {
   let getConnection: sinon.SinonStub;
   let originalExitCode: typeof process.exitCode;
   let originalIsTTY: PropertyDescriptor | undefined;
+  let originalOutputTTY: PropertyDescriptor | undefined;
 
   const setInteractive = (interactive: boolean): void => {
     Object.defineProperty(process.stdin, 'isTTY', { configurable: true, value: interactive });
+    Object.defineProperty(process.stdout, 'isTTY', { configurable: true, value: interactive });
   };
 
   const expectError = async (commandArgs: string[], fragment?: string): Promise<Error> => {
@@ -160,6 +171,7 @@ describe('flow version delete command', () => {
   beforeEach(() => {
     originalExitCode = process.exitCode;
     originalIsTTY = Object.getOwnPropertyDescriptor(process.stdin, 'isTTY');
+    originalOutputTTY = Object.getOwnPropertyDescriptor(process.stdout, 'isTTY');
     process.exitCode = undefined;
     setInteractive(false);
     plan = planFixture();
@@ -188,6 +200,8 @@ describe('flow version delete command', () => {
     process.exitCode = originalExitCode;
     if (originalIsTTY) Object.defineProperty(process.stdin, 'isTTY', originalIsTTY);
     else Reflect.deleteProperty(process.stdin, 'isTTY');
+    if (originalOutputTTY) Object.defineProperty(process.stdout, 'isTTY', originalOutputTTY);
+    else Reflect.deleteProperty(process.stdout, 'isTTY');
   });
 
   it('forwards arbitrary Flow names, namespaces, version expressions and API version without hardcoded selection', async () => {
@@ -208,11 +222,11 @@ describe('flow version delete command', () => {
     ]);
 
     expect(planStub.calledOnce).to.equal(true);
-    expect(planStub.firstCall.args).to.deep.equal([
+    expect(planStub.firstCall.args.slice(0, 1)).to.deep.equal([
       { flowName: 'Receipt_Reconciliation', namespace: 'billing', versions: '2,4-6' },
     ]);
     expect(getConnection.calledOnceWithExactly('67.0')).to.equal(true);
-    expect(result.plan).to.equal(plan);
+    expect(result).not.to.have.property('plan');
     expect(String(log.firstCall.args[0])).to.include('Flow: billing__Receipt_Reconciliation');
     expect(execute.called).to.equal(false);
   });
@@ -220,7 +234,8 @@ describe('flow version delete command', () => {
   it('allows a noninteractive dry run without confirmation and sends no mutation', async () => {
     const result = await runNormal([...args, '--dry-run']);
 
-    expect(result).to.deep.equal({ ...commandReportFixture(plan), dryRun: true });
+    expect(result).to.deep.equal(projectNormalReport({ ...commandReportFixture(plan), dryRun: true }));
+    expect(planStub.firstCall.args[1]).to.deep.equal({ preview: true });
     expect(planStub.calledOnce).to.equal(true);
     expect(confirm.called).to.equal(false);
     expect(execute.called).to.equal(false);
@@ -232,9 +247,9 @@ describe('flow version delete command', () => {
   it('returns the full dry-run plan as JSON without a prompt or human output', async () => {
     const result = await runNormal([...args, '--dry-run', '--json']);
 
-    expect(result.plan).to.deep.equal(plan);
-    expect(result.deletion).to.equal(null);
-    expect(result.outcome).to.equal('PREVIEWED');
+    expect(result.results.map((row) => row.versionNumber)).to.deep.equal(plan.versions.map((row) => row.versionNumber));
+    expect(result).not.to.have.property('deletion');
+    expect(result.outcome).to.equal('previewed');
     expect(result.confirmed).to.equal(false);
     expect(confirm.called).to.equal(false);
     expect(execute.called).to.equal(false);
@@ -243,34 +258,31 @@ describe('flow version delete command', () => {
     expect(logJson.calledOnce).to.equal(true);
   });
 
-  it('rejects noninteractive mutation without --yes before planning or executing', async () => {
-    await expectError(args, 'requires --yes');
-
-    expect(planStub.called).to.equal(false);
-    expect(execute.called).to.equal(false);
-    expect(confirm.called).to.equal(false);
-    expect(getConnection.called).to.equal(false);
+  it('automatically previews nonterminal deletion without explicit approval', async () => {
+    setInteractive(false);
+    const result = await runNormal(args);
+    expect(result.dryRun).to.equal(true);
+    expect(result.outcome).to.equal('previewed');
+    expect(planStub.firstCall.args[1]).to.deep.equal({ preview: true });
+    expect(execute.called || confirm.called).to.equal(false);
   });
 
-  it('rejects JSON mutation without --yes even when stdin is interactive', async () => {
+  it('automatically previews JSON deletion without explicit approval', async () => {
     setInteractive(true);
-    await expectError([...args, '--json'], 'requires --yes');
-
-    expect(planStub.called).to.equal(false);
-    expect(execute.called).to.equal(false);
-    expect(confirm.called).to.equal(false);
-    expect(log.called).to.equal(false);
-    expect(logToStderr.called).to.equal(false);
-    expect(logJson.calledOnce).to.equal(true);
+    const result = await runNormal([...args, '--json']);
+    expect(result.dryRun).to.equal(true);
+    expect(result.outcome).to.equal('previewed');
+    expect(planStub.firstCall.args[1]).to.deep.equal({ preview: true });
+    expect(execute.called || confirm.called).to.equal(false);
   });
 
   it('displays the exact plan before prompting, defaults to no and cancels without mutation', async () => {
     setInteractive(true);
     const result = await runNormal(args);
 
-    expect(result.outcome).to.equal('CANCELLED');
+    expect(result.outcome).to.equal('cancelled');
     expect(result.confirmed).to.equal(false);
-    expect(result.deletion).to.equal(null);
+    expect(result).not.to.have.property('deletion');
     expect(log.calledBefore(confirm)).to.equal(true);
     expect(String(log.firstCall.args[0])).to.include('v2 | 301xx000003Ga19AAC | Draft');
     expect(confirm.calledOnce).to.equal(true);
@@ -280,19 +292,20 @@ describe('flow version delete command', () => {
     expect(String(log.lastCall.args[0])).to.include('Deletion cancelled');
   });
 
-  it('allows one minute for standard-flag confirmation and cancels when the prompt times out unanswered', async () => {
+  it('maps a real standard-flag confirmation deadline to exit 69', async () => {
     setInteractive(true);
-    confirm.resolves(false);
+    confirm.rejects(new ConfirmationTimeoutError());
 
     const result = await runNormal(args);
 
     expect(confirm.calledOnce).to.equal(true);
     expect(confirm.firstCall.args[0]).to.include({ ms: 60_000, defaultAnswer: false });
-    expect(result.outcome).to.equal('CANCELLED');
+    expect(result.outcome).to.equal('timed_out');
     expect(result.confirmed).to.equal(false);
-    expect(result.deletion).to.equal(null);
+    expect(result).not.to.have.property('deletion');
     expect(execute.called).to.equal(false);
-    expect(String(log.lastCall.args[0])).to.include('Deletion cancelled');
+    expect(String(log.lastCall.args[0])).to.include('timed out');
+    expect(process.exitCode).to.equal(69);
   });
 
   it('executes the same displayed plan after explicit interactive confirmation', async () => {
@@ -304,8 +317,10 @@ describe('flow version delete command', () => {
     expect(execute.firstCall.args[0]).to.equal(plan);
     expect(confirm.calledBefore(execute)).to.equal(true);
     expect(result.confirmed).to.equal(true);
-    expect(result.deletion).to.equal(deletion);
-    expect(result.outcome).to.equal('SUCCEEDED');
+    expect(result.results.map((row) => row.versionNumber)).to.deep.equal(
+      deletion.results.map((row) => row.versionNumber)
+    );
+    expect(result.outcome).to.equal('succeeded');
     expect(log.callCount).to.equal(2);
   });
 
@@ -316,20 +331,25 @@ describe('flow version delete command', () => {
     expect(confirm.called).to.equal(false);
     expect(execute.calledOnce).to.equal(true);
     expect(execute.firstCall.args[0]).to.equal(plan);
-    expect(result).to.deep.equal({
-      ...commandReportFixture(plan),
-      confirmed: true,
-      outcome: 'SUCCEEDED',
-      deletion,
-    });
+    expect(result).to.deep.equal(
+      projectNormalReport({
+        ...commandReportFixture(plan),
+        confirmed: true,
+        outcome: 'SUCCEEDED',
+        deletion,
+      })
+    );
     expect(String(log.firstCall.args[0])).to.include('=== Results');
-    expect(String(log.firstCall.args[0])).to.include('v2 | 301xx000003Ga19AAC | SUCCEEDED');
+    expect(String(log.firstCall.args[0])).to.include('v2 | 301xx000003Ga19AAC | DELETED');
+    expect(planStub.firstCall.args[1]).to.deep.equal({ preview: false });
   });
 
   it('returns successful JSON deletion results without human output', async () => {
     const result = await runNormal([...args, '--yes', '--json']);
 
-    expect(result.deletion).to.deep.equal(deletion);
+    expect(result.results.map((row) => row.versionNumber)).to.deep.equal(
+      deletion.results.map((row) => row.versionNumber)
+    );
     expect(result.confirmed).to.equal(true);
     expect(log.called).to.equal(false);
     expect(logToStderr.called).to.equal(false);
@@ -337,44 +357,78 @@ describe('flow version delete command', () => {
     expect(logJson.calledOnce).to.equal(true);
   });
 
-  it('preserves a partial SDK result in JSON and sets a nonzero exit code', async () => {
+  it('reports a wholly blocked result accurately despite an inconsistent aggregate SDK label', async () => {
     deletion.outcome = 'PARTIAL';
     deletion.results[0].state = 'BLOCKED';
     deletion.results[0].targetDeleted = false;
-    deletion.results[0].source = 'ASSESSMENT';
+    deletion.results[0].source = 'CORE';
+    deletion.results[0].coreResult = {
+      versionId: deletion.results[0].versionId!,
+      outcome: 'BLOCKED',
+      reasonCode: 'ACTIVE_VERSION',
+      message: 'ACTIVE_VERSION',
+      evidence: [],
+    };
     deletion.results[0].error = { code: 'ACTIVE_VERSION', message: 'ACTIVE_VERSION' };
     const result = await runNormal([...args, '--yes', '--json']);
 
-    expect(result.outcome).to.equal('PARTIAL');
-    expect(result.deletion).to.deep.equal(deletion);
+    expect(result.outcome).to.equal('blocked');
+    expect(result.results[0].blockingReasons[0].code).to.equal('ACTIVE_VERSION');
+    expect(result.summary.succeeded).to.equal(0);
     expect(process.exitCode).to.equal(1);
     expect(log.called).to.equal(false);
     expect(logJson.calledOnce).to.equal(true);
     expect(execute.calledOnce).to.equal(true);
   });
 
+  it('uses the public blocked classification in console output when every version is blocked', async () => {
+    deletion.outcome = 'FAILED';
+    Object.assign(deletion.results[0], {
+      state: 'BLOCKED',
+      source: 'CORE',
+      targetDeleted: false,
+      coreResult: {
+        versionId: deletion.results[0].versionId!,
+        outcome: 'BLOCKED',
+        reasonCode: 'ACTIVE_VERSION',
+        message: 'The active version cannot be deleted.',
+        evidence: [],
+      },
+      error: { code: 'ACTIVE_VERSION', message: 'The active version cannot be deleted.' },
+    });
+    const result = await runNormal([...args, '--no-prompt']);
+    expect(result.outcome).to.equal('blocked');
+    expect(process.exitCode).to.equal(1);
+    expect(String(log.lastCall.args[0])).to.include('Outcome: blocked').and.include('| BLOCKED');
+    expect(String(log.lastCall.args[0])).not.to.include('Outcome: FAILED');
+    expect(result.results[0].blockingReasons[0].code).to.equal('ACTIVE_VERSION');
+  });
+
   it('preserves an unknown SDK outcome in JSON and does not retry execution', async () => {
     deletion.outcome = 'UNKNOWN';
     deletion.results[0].state = 'UNKNOWN';
     deletion.results[0].targetDeleted = null;
-    deletion.results[0].source = 'TOOLING';
+    deletion.results[0].source = 'CORE';
+    deletion.results[0].coreResult = null;
     deletion.results[0].error = {
       code: 'DELETE_OUTCOME_UNCONFIRMED',
       message: 'The deletion outcome is not confirmed.',
     };
     const result = await runNormal([...args, '--yes', '--json']);
 
-    expect(result.outcome).to.equal('UNKNOWN');
-    expect(result.deletion).to.deep.equal(deletion);
-    expect(process.exitCode).to.equal(2);
+    expect(result.outcome).to.equal('unknown');
+    expect(result.results.map((row) => row.versionNumber)).to.deep.equal(
+      deletion.results.map((row) => row.versionNumber)
+    );
+    expect(process.exitCode).to.equal(1);
     expect(execute.calledOnce).to.equal(true);
     expect(log.called).to.equal(false);
     expect(logJson.calledOnce).to.equal(true);
   });
 
-  it('never executes or prompts when the whole assessment request fails', async () => {
-    planStub.rejects(new SfError('Unable to complete the assessment request.', 'ASSESSMENT_REQUEST_FAILED'));
-    await expectError([...args, '--yes'], 'Unable to complete the assessment request');
+  it('never executes or prompts when list-based target resolution fails', async () => {
+    planStub.rejects(new SfError('Unable to list the selected Flow.', 'LIST_REQUEST_FAILED'));
+    await expectError([...args, '--yes'], 'Unable to list the selected Flow');
 
     expect(execute.called).to.equal(false);
     expect(confirm.called).to.equal(false);
@@ -391,7 +445,7 @@ describe('flow version delete command', () => {
   it('returns mixed C2 results without dropping blocked versions or later successes', async () => {
     plan.requestedVersions = [1, 2, 3];
     plan.versions = [1, 2, 3].map(targetFixture);
-    blockTarget(plan.versions[0], 'PAUSED_INTERVIEWS', 'PAUSED_INTERVIEWS (1)');
+    blockTarget(plan.versions[0], 'HAS_INTERVIEWS', 'HAS_INTERVIEWS (1)');
     blockTarget(plan.versions[1], 'ACTIVE_VERSION');
     deletion = deletionFixture(plan);
     deletion.outcome = 'PARTIAL';
@@ -401,10 +455,30 @@ describe('flow version delete command', () => {
             ...target,
             state: 'BLOCKED',
             targetDeleted: false,
-            source: 'ASSESSMENT',
+            source: 'CORE',
+            coreResult: {
+              versionId: target.versionId!,
+              outcome: 'BLOCKED',
+              reasonCode: target.assessment.reasonCode!,
+              message: target.assessment.message!,
+              evidence: [],
+            },
             error: { code: target.assessment.reasonCode!, message: target.assessment.message! },
           }
-        : { ...target, state: 'SUCCEEDED', targetDeleted: true, source: 'TOOLING', error: null }
+        : {
+            ...target,
+            state: 'SUCCEEDED',
+            targetDeleted: true,
+            source: 'CORE',
+            coreResult: {
+              versionId: target.versionId!,
+              outcome: 'DELETED',
+              reasonCode: null,
+              message: null,
+              evidence: [],
+            },
+            error: null,
+          }
     );
     execute.resolves(deletion);
 
@@ -419,9 +493,9 @@ describe('flow version delete command', () => {
       '--json',
     ]);
 
-    expect(result.deletion?.results.map((item) => item.state)).to.deep.equal(['BLOCKED', 'BLOCKED', 'SUCCEEDED']);
-    expect(result.deletion?.results[0].error?.message).to.equal('PAUSED_INTERVIEWS (1)');
-    expect(process.exitCode).to.equal(1);
+    expect(result.results.map((item) => item.outcome)).to.deep.equal(['blocked', 'blocked', 'succeeded']);
+    expect(result.results[0].blockingReasons[0].message).to.equal('HAS_INTERVIEWS (1)');
+    expect(process.exitCode).to.equal(68);
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
     expect(execute.calledOnceWithExactly(plan)).to.equal(true);
     expect(confirm.called).to.equal(false);
@@ -442,6 +516,7 @@ describe('flow version delete command', () => {
     Object.assign(deletion.results[1], {
       state: 'FAILED',
       source: 'RESOLUTION',
+      coreResult: null,
       targetDeleted: false,
       error: missing.error,
     });
@@ -449,18 +524,18 @@ describe('flow version delete command', () => {
 
     const result = await runNormal([...args, '--yes', '--json']);
 
-    expect(result.deletion?.results.map((item) => item.state)).to.deep.equal(['SUCCEEDED', 'FAILED']);
-    expect(result.deletion?.results[1].versionId).to.equal(null);
-    expect(process.exitCode).to.equal(2);
+    expect(result.results.map((item) => item.outcome)).to.deep.equal(['succeeded', 'failed']);
+    expect(result.results[1].versionId).to.equal(null);
+    expect(process.exitCode).to.equal(68);
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
   });
 
-  it('keeps an assessment ERROR distinct from a business blocker', async () => {
+  it('keeps a Core ERROR distinct from a business blocker', async () => {
     const target = plan.versions[0];
     target.assessment = {
       versionId: target.versionId!,
       outcome: 'ERROR',
-      reasonCode: 'OPERATIONAL',
+      reasonCode: 'DELETE_ERROR',
       message: null,
       evidence: [],
     };
@@ -468,17 +543,24 @@ describe('flow version delete command', () => {
     deletion.outcome = 'FAILED';
     Object.assign(deletion.results[0], {
       state: 'FAILED',
-      source: 'ASSESSMENT',
+      source: 'CORE',
       targetDeleted: false,
-      error: { code: 'OPERATIONAL', message: 'The version was not assessed.' },
+      coreResult: {
+        versionId: target.versionId!,
+        outcome: 'ERROR',
+        reasonCode: 'DELETE_ERROR',
+        message: 'The version could not be deleted.',
+        evidence: [],
+      },
+      error: { code: 'DELETE_ERROR', message: 'The version could not be deleted.' },
     });
     execute.resolves(deletion);
 
     const result = await runNormal([...args, '--yes']);
 
-    expect(process.exitCode).to.equal(2);
-    expect(result.deletion?.results[0].state).to.equal('FAILED');
-    expect(String(log.firstCall.args[0])).to.include('OPERATIONAL');
+    expect(process.exitCode).to.equal(1);
+    expect(result.results[0].outcome).to.equal('failed');
+    expect(String(log.firstCall.args[0])).to.include('DELETE_ERROR');
     expect(String(log.firstCall.args[0])).not.to.include('| BLOCKED');
   });
 
@@ -496,10 +578,10 @@ describe('flow version delete command', () => {
 
     const result = await runNormal([...args, '--dry-run', '--json']);
 
-    expect(result.plan.versions[0].assessment?.outcome).to.equal('BLOCKED');
-    expect(result.plan.versions[1].versionId).to.equal(null);
-    expect(result.outcome).to.equal('PREVIEWED');
-    expect(process.exitCode).to.equal(undefined);
+    expect(result.results[0].action).to.equal('blocked');
+    expect(result.results[1].versionId).to.equal(null);
+    expect(result.outcome).to.equal('previewed');
+    expect(process.exitCode).to.equal(0);
     expect(execute.called).to.equal(false);
     expect(confirm.called).to.equal(false);
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
@@ -512,22 +594,36 @@ describe('flow version delete command', () => {
     deletion.outcome = 'FAILED';
     Object.assign(deletion.results[0], {
       state: 'BLOCKED',
-      source: 'ASSESSMENT',
+      source: 'CORE',
       targetDeleted: false,
+      coreResult: {
+        versionId: deletion.results[0].versionId!,
+        outcome: 'BLOCKED',
+        reasonCode: 'ACTIVE_VERSION',
+        message: 'ACTIVE_VERSION',
+        evidence: [],
+      },
       error: { code: 'ACTIVE_VERSION', message: 'ACTIVE_VERSION' },
     });
     Object.assign(deletion.results[1], {
       state: 'FAILED',
-      source: 'TOOLING',
+      source: 'CORE',
       targetDeleted: false,
-      error: { code: 'DELETE_FAILED', message: 'The platform rejected deletion.' },
+      coreResult: {
+        versionId: deletion.results[1].versionId!,
+        outcome: 'ERROR',
+        reasonCode: 'DELETE_ERROR',
+        message: 'The platform rejected deletion.',
+        evidence: [],
+      },
+      error: { code: 'DELETE_ERROR', message: 'The platform rejected deletion.' },
     });
     execute.resolves(deletion);
 
     const result = await runNormal([...args, '--yes', '--json']);
 
-    expect(process.exitCode).to.equal(2);
-    expect(result.deletion?.results.map((item) => item.state)).to.deep.equal(['BLOCKED', 'FAILED']);
+    expect(process.exitCode).to.equal(1);
+    expect(result.results.map((item) => item.outcome)).to.deep.equal(['blocked', 'failed']);
   });
 
   it('preserves unknown and not-attempted items rather than claiming a confirmed failure', async () => {
@@ -537,12 +633,14 @@ describe('flow version delete command', () => {
     deletion.outcome = 'UNKNOWN';
     Object.assign(deletion.results[0], {
       state: 'UNKNOWN',
-      source: 'TOOLING',
+      coreResult: null,
+      source: 'CORE',
       targetDeleted: null,
       error: { code: 'DELETE_OUTCOME_UNCONFIRMED', message: 'The response was lost.' },
     });
     Object.assign(deletion.results[1], {
       state: 'NOT_ATTEMPTED',
+      coreResult: null,
       source: 'SAFETY',
       targetDeleted: null,
       error: { code: 'EXECUTION_STOPPED', message: 'An earlier outcome needs reconciliation.' },
@@ -551,8 +649,8 @@ describe('flow version delete command', () => {
 
     const result = await runNormal([...args, '--yes', '--json']);
 
-    expect(process.exitCode).to.equal(2);
-    expect(result.deletion?.results.every((item) => item.targetDeleted === null)).to.equal(true);
+    expect(process.exitCode).to.equal(1);
+    expect(result.results.map((item) => item.outcome)).to.deep.equal(['unknown', 'not_attempted']);
     expect(execute.calledOnce).to.equal(true);
     expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
   });
@@ -564,6 +662,22 @@ describe('flow version delete command', () => {
 
     expect(error).to.be.instanceOf(SfError);
     expect((error as SfError).code).to.equal('ASSESSMENT_API_VERSION_UNSUPPORTED');
+    expect(execute.called).to.equal(false);
+  });
+
+  for (const code of ['INVALID_IDENTIFIER', 'INVALID_SELECTION', 'SELECTION_TOO_LARGE']) {
+    it(`maps genuine input validation ${code} to usage exit 2`, async () => {
+      planStub.rejects(new FlowVersionError(code, 'Correct the explicit Flow/version selection.'));
+      const failure = await expectError([...args, '--dry-run'], 'Correct the explicit');
+      expect((failure as SfError).exitCode).to.equal(2);
+      expect(execute.called).to.equal(false);
+    });
+  }
+
+  it('keeps a malformed backend inventory as runtime error 1 rather than invalid usage', async () => {
+    planStub.rejects(new FlowVersionError('INVALID_INVENTORY', 'The server returned an invalid inventory.'));
+    const failure = await expectError([...args, '--dry-run'], 'invalid inventory');
+    expect((failure as SfError).exitCode).to.equal(1);
     expect(execute.called).to.equal(false);
   });
 
@@ -599,12 +713,12 @@ describe('flow version delete command', () => {
 
       expect(planStub.callCount).to.equal(2);
       for (const call of planStub.getCalls()) {
-        expect(call.args).to.deep.equal([{ flowName: 'MyFlow1', versions: '1,2,3', namespace: undefined }]);
+        expect(call.args.slice(0, 1)).to.deep.equal([{ flowName: 'MyFlow1', versions: '1,2,3', namespace: undefined }]);
       }
       expect(createOrg.calledWithExactly({ aliasOrUsername: 'source' })).to.equal(true);
       expect(bareResult).to.deep.equal(flaggedResult);
       expect(bareResult.dryRun).to.equal(true);
-      expect(bareResult.outcome).to.equal('PREVIEWED');
+      expect(bareResult.outcome).to.equal('previewed');
       expect(confirm.called).to.equal(false);
       expect(execute.called).to.equal(false);
     });
@@ -612,7 +726,7 @@ describe('flow version delete command', () => {
     it('preserves native --dry-run and --json behavior without human output or confirmation', async () => {
       const result = await runNormal(['--json', ...bareArgs, '--dry-run']);
 
-      expect(result).to.deep.equal({ ...commandReportFixture(plan), dryRun: true });
+      expect(result).to.deep.equal(projectNormalReport({ ...commandReportFixture(plan), dryRun: true }));
       expect(planStub.calledOnce).to.equal(true);
       expect(confirm.called).to.equal(false);
       expect(execute.called).to.equal(false);
@@ -628,10 +742,10 @@ describe('flow version delete command', () => {
         userPlugins: false,
       });
 
-      expect(result).to.deep.equal({ ...commandReportFixture(plan), dryRun: true });
-      expect(
-        planStub.calledOnceWithExactly({ flowName: 'Invoice_Approval', versions: '2', namespace: undefined })
-      ).to.equal(true);
+      expect(result).to.deep.equal(projectNormalReport({ ...commandReportFixture(plan), dryRun: true }));
+      expect(planStub.calledOnceWith({ flowName: 'Invoice_Approval', versions: '2', namespace: undefined })).to.equal(
+        true
+      );
       expect(confirm.called).to.equal(false);
       expect(execute.called).to.equal(false);
       expect(log.called).to.equal(false);
@@ -642,44 +756,41 @@ describe('flow version delete command', () => {
     it('forwards bare namespace and API-version values alongside the required pairs', async () => {
       await runNormal([...bareArgs, 'namespace', 'billing', 'api-version', '67.0', '--dry-run']);
 
-      expect(
-        planStub.calledOnceWithExactly({ flowName: 'Invoice_Approval', versions: '2', namespace: 'billing' })
-      ).to.equal(true);
+      expect(planStub.calledOnceWith({ flowName: 'Invoice_Approval', versions: '2', namespace: 'billing' })).to.equal(
+        true
+      );
       expect(getConnection.calledOnceWithExactly('67.0')).to.equal(true);
       expect(execute.called).to.equal(false);
     });
 
-    it('requires --yes for a noninteractive mutation before planning or executing', async () => {
-      await expectError(bareArgs, 'requires --yes');
-
-      expect(planStub.called).to.equal(false);
-      expect(execute.called).to.equal(false);
-      expect(confirm.called).to.equal(false);
-      expect(getConnection.called).to.equal(false);
+    it('automatically previews nonterminal deletion without explicit approval', async () => {
+      setInteractive(false);
+      const result = await runNormal(bareArgs);
+      expect(result.dryRun).to.equal(true);
+      expect(result.outcome).to.equal('previewed');
+      expect(planStub.firstCall.args[1]).to.deep.equal({ preview: true });
+      expect(execute.called || confirm.called).to.equal(false);
     });
 
-    it('requires --yes for JSON mutation even with interactive stdin', async () => {
+    it('automatically previews JSON deletion without explicit approval', async () => {
       setInteractive(true);
-      await expectError([...bareArgs, '--json'], 'requires --yes');
-
-      expect(planStub.called).to.equal(false);
-      expect(execute.called).to.equal(false);
-      expect(confirm.called).to.equal(false);
-      expect(log.called).to.equal(false);
-      expect(logToStderr.called).to.equal(false);
-      expect(logJson.calledOnce).to.equal(true);
+      const result = await runNormal([...bareArgs, '--json']);
+      expect(result.dryRun).to.equal(true);
+      expect(result.outcome).to.equal('previewed');
+      expect(planStub.firstCall.args[1]).to.deep.equal({ preview: true });
+      expect(execute.called || confirm.called).to.equal(false);
     });
 
     it('shows the exact plan, defaults interactive confirmation to no and cancels without execution', async () => {
       setInteractive(true);
       const result = await runNormal(bareArgs);
 
-      expect(planStub.firstCall.args).to.deep.equal([
+      expect(planStub.firstCall.args.slice(0, 1)).to.deep.equal([
         { flowName: 'Invoice_Approval', versions: '2', namespace: undefined },
       ]);
-      expect(result.outcome).to.equal('CANCELLED');
+      expect(result.outcome).to.equal('cancelled');
       expect(result.confirmed).to.equal(false);
-      expect(result.deletion).to.equal(null);
+      expect(result).not.to.have.property('deletion');
       expect(log.calledBefore(confirm)).to.equal(true);
       expect(String(log.firstCall.args[0])).to.include('v2 | 301xx000003Ga19AAC | Draft');
       expect(confirm.calledOnce).to.equal(true);
@@ -688,19 +799,20 @@ describe('flow version delete command', () => {
       expect(execute.called).to.equal(false);
     });
 
-    it('allows one minute for bare-pair confirmation and cancels when the prompt times out unanswered', async () => {
+    it('maps a real bare-pair confirmation deadline to exit 69', async () => {
       setInteractive(true);
-      confirm.resolves(false);
+      confirm.rejects(new ConfirmationTimeoutError());
 
       const result = await runNormal(bareArgs);
 
       expect(confirm.calledOnce).to.equal(true);
       expect(confirm.firstCall.args[0]).to.include({ ms: 60_000, defaultAnswer: false });
-      expect(result.outcome).to.equal('CANCELLED');
+      expect(result.outcome).to.equal('timed_out');
       expect(result.confirmed).to.equal(false);
-      expect(result.deletion).to.equal(null);
+      expect(result).not.to.have.property('deletion');
       expect(execute.called).to.equal(false);
-      expect(String(log.lastCall.args[0])).to.include('Deletion cancelled');
+      expect(String(log.lastCall.args[0])).to.include('timed out');
+      expect(process.exitCode).to.equal(69);
     });
 
     it('executes the same displayed plan after explicit interactive confirmation', async () => {
@@ -708,24 +820,28 @@ describe('flow version delete command', () => {
       confirm.resolves(true);
       const result = await runNormal(bareArgs);
 
-      expect(result.plan).to.equal(plan);
+      expect(result).not.to.have.property('plan');
       expect(log.calledBefore(confirm)).to.equal(true);
       expect(confirm.calledBefore(execute)).to.equal(true);
       expect(execute.calledOnceWithExactly(plan)).to.equal(true);
       expect(result.confirmed).to.equal(true);
-      expect(result.deletion).to.equal(deletion);
-      expect(result.outcome).to.equal('SUCCEEDED');
+      expect(result.results.map((row) => row.versionNumber)).to.deep.equal(
+        deletion.results.map((row) => row.versionNumber)
+      );
+      expect(result.outcome).to.equal('succeeded');
     });
 
     it('uses native --yes and --json to execute exactly the resolved plan without prompting', async () => {
       const result = await runNormal([...bareArgs, '--yes', '--json']);
 
-      expect(result).to.deep.equal({
-        ...commandReportFixture(plan),
-        confirmed: true,
-        outcome: 'SUCCEEDED',
-        deletion,
-      });
+      expect(result).to.deep.equal(
+        projectNormalReport({
+          ...commandReportFixture(plan),
+          confirmed: true,
+          outcome: 'SUCCEEDED',
+          deletion,
+        })
+      );
       expect(planStub.calledOnce).to.equal(true);
       expect(execute.calledOnceWithExactly(plan)).to.equal(true);
       expect(confirm.called).to.equal(false);
@@ -742,12 +858,12 @@ describe('flow version delete command', () => {
       it(`accepts mixed standard flags and bare pairs: ${commandArgs.join(' ')}`, async () => {
         const result = await runNormal([...commandArgs, '--yes']);
 
-        expect(
-          planStub.calledOnceWithExactly({ flowName: 'Invoice_Approval', versions: '2', namespace: undefined })
-        ).to.equal(true);
+        expect(planStub.calledOnceWith({ flowName: 'Invoice_Approval', versions: '2', namespace: undefined })).to.equal(
+          true
+        );
         expect(createOrg.calledWithExactly({ aliasOrUsername: 'source' })).to.equal(true);
         expect(execute.calledOnceWithExactly(plan)).to.equal(true);
-        expect(result.outcome).to.equal('SUCCEEDED');
+        expect(result.outcome).to.equal('succeeded');
       });
     }
 
@@ -756,9 +872,7 @@ describe('flow version delete command', () => {
         await runNormal(['target-org', value, 'flow', value, 'versions', value, '--dry-run']);
 
         expect(createOrg.calledWithExactly({ aliasOrUsername: value })).to.equal(true);
-        expect(planStub.calledOnceWithExactly({ flowName: value, versions: value, namespace: undefined })).to.equal(
-          true
-        );
+        expect(planStub.calledOnceWith({ flowName: value, versions: value, namespace: undefined })).to.equal(true);
         expect(execute.called).to.equal(false);
       });
 
@@ -766,9 +880,7 @@ describe('flow version delete command', () => {
         await runNormal(['--target-org', value, '--flow', value, 'versions', value, '--dry-run']);
 
         expect(createOrg.calledWithExactly({ aliasOrUsername: value })).to.equal(true);
-        expect(planStub.calledOnceWithExactly({ flowName: value, versions: value, namespace: undefined })).to.equal(
-          true
-        );
+        expect(planStub.calledOnceWith({ flowName: value, versions: value, namespace: undefined })).to.equal(true);
         expect(execute.called).to.equal(false);
       });
     }
@@ -782,9 +894,9 @@ describe('flow version delete command', () => {
         const result = await runNormal([...commandArgs, '-y']);
 
         expect(createOrg.calledWithExactly({ aliasOrUsername: 'source' })).to.equal(true);
-        expect(
-          planStub.calledOnceWithExactly({ flowName: 'Invoice_Approval', versions: '2', namespace: undefined })
-        ).to.equal(true);
+        expect(planStub.calledOnceWith({ flowName: 'Invoice_Approval', versions: '2', namespace: undefined })).to.equal(
+          true
+        );
         expect(execute.calledOnceWithExactly(plan)).to.equal(true);
         expect(confirm.called).to.equal(false);
         expect(result.confirmed).to.equal(true);
@@ -795,9 +907,9 @@ describe('flow version delete command', () => {
       await runNormal(['-o', 'flow', '-f', 'versions', '--versions', 'target-org', '--dry-run']);
 
       expect(createOrg.calledWithExactly({ aliasOrUsername: 'flow' })).to.equal(true);
-      expect(
-        planStub.calledOnceWithExactly({ flowName: 'versions', versions: 'target-org', namespace: undefined })
-      ).to.equal(true);
+      expect(planStub.calledOnceWith({ flowName: 'versions', versions: 'target-org', namespace: undefined })).to.equal(
+        true
+      );
       expect(execute.called).to.equal(false);
     });
 
@@ -841,17 +953,14 @@ describe('flow version delete command', () => {
 
     const duplicateCases = [
       { name: 'bare Flow pairs', commandArgs: [...bareArgs, 'flow', 'Another_Flow'] },
-      { name: 'bare version pairs', commandArgs: [...bareArgs, 'versions', '3'] },
       { name: 'bare target-org pairs', commandArgs: [...bareArgs, 'target-org', 'other'] },
       { name: 'a bare Flow pair and --flow', commandArgs: [...bareArgs, '--flow', 'Another_Flow'] },
       { name: '--flow and a bare Flow pair', commandArgs: [...args, 'flow', 'Another_Flow'] },
       { name: 'a bare Flow pair and -f', commandArgs: [...bareArgs, '-f', 'Another_Flow'] },
       { name: 'a bare Flow pair and --flow=', commandArgs: [...bareArgs, '--flow=Another_Flow'] },
-      { name: 'a bare version pair and --versions=', commandArgs: [...bareArgs, '--versions=3'] },
       { name: 'a bare target-org pair and -o', commandArgs: [...bareArgs, '-o', 'other'] },
       { name: 'standard --flow flags', commandArgs: [...args, '--flow', 'Another_Flow'] },
       { name: '--flow and -f', commandArgs: [...args, '-f', 'Another_Flow'] },
-      { name: 'standard --versions flags', commandArgs: [...args, '--versions=3'] },
       { name: 'standard --target-org flags', commandArgs: [...args, '--target-org=other'] },
       { name: 'standard namespace flags', commandArgs: [...args, '--namespace', 'billing', '--namespace=other'] },
       { name: 'standard API-version flags', commandArgs: [...args, '--api-version', '67.0', '--api-version=66.0'] },
@@ -866,6 +975,42 @@ describe('flow version delete command', () => {
         expect(confirm.called).to.equal(false);
       });
     }
+  });
+
+  for (const values of [
+    ['--versions', '3', '--versions', '4', '--versions', '7-12'],
+    ['versions', '3,4', '--versions', '7-12'],
+  ]) {
+    it(`accepts repeated version values without absorbing following bare pairs: ${values.join(' ')}`, async () => {
+      const result = await runNormal([...values, 'flow', 'Invoice_Approval', 'target-org', 'source', '--dry-run']);
+      expect(planStub.firstCall.args[0]).to.include({ versions: '3,4,7-12', flowName: 'Invoice_Approval' });
+      expect(result.dryRun).to.equal(true);
+      expect(execute.called).to.equal(false);
+    });
+  }
+
+  for (const approval of ['--no-prompt', '-p', '--yes', '-y']) {
+    it(`explicit approval ${approval} authorizes JSON mutation without prompting`, async () => {
+      const result = await runNormal([...args, approval, '--json']);
+      expect(execute.calledOnceWithExactly(plan)).to.equal(true);
+      expect(confirm.called).to.equal(false);
+      expect(result.summary.succeeded).to.equal(1);
+      expect(process.exitCode).to.equal(0);
+    });
+  }
+
+  it('keeps explicit dry run read-only even with noninteractive approval', async () => {
+    const result = await runNormal([...args, '--no-prompt', '--dry-run', '--json']);
+    expect(planStub.firstCall.args[1]).to.deep.equal({ preview: true });
+    expect(result.dryRun).to.equal(true);
+    expect(execute.called || confirm.called).to.equal(false);
+  });
+
+  it('preserves key-like values after combined compatibility short flags', async () => {
+    await runNormal(['-yo', 'flow', 'flow', 'Invoice_Approval', 'versions', '2']);
+    expect(createOrg.calledWithExactly({ aliasOrUsername: 'flow' })).to.equal(true);
+    expect(planStub.firstCall.args[0]).to.include({ flowName: 'Invoice_Approval', versions: '2' });
+    expect(execute.calledOnce).to.equal(true);
   });
 
   it('formats the selected versions with readable sections and one surrounding blank line', () => {
@@ -915,7 +1060,11 @@ describe('flow version delete command', () => {
 
   it('renders per-version errors and execution warnings instead of preview warnings', () => {
     const report = commandReportFixture(plan);
-    deletion.results[0].error = { code: 'DEPENDENCY\nBLOCK', message: 'Referenced\nby another component.' };
+    deletion.results[0].state = 'FAILED';
+    deletion.results[0].targetDeleted = false;
+    deletion.results[0].coreResult = null;
+    deletion.results[0].source = 'RESOLUTION';
+    deletion.results[0].error = { code: 'RESOLUTION\nERROR', message: 'Target\ncould not be resolved.' };
     deletion.warnings = ['Not an atomic\nbatch.'];
     report.deletion = deletion;
     report.outcome = deletion.outcome;
@@ -923,15 +1072,15 @@ describe('flow version delete command', () => {
     const output = formatVersionDeleteReport(report);
 
     expect(output).to.include('=== Results');
-    expect(output).to.include('DEPENDENCY BLOCK: Referenced by another component.');
+    expect(output).to.include('RESOLUTION ERROR: Target could not be resolved.');
     expect(output).to.include('Warning: Not an atomic batch.');
     expect(output).not.to.include('Client selection checks are not atomic.');
     expect(output).not.to.include('=== Selected versions');
   });
 
-  it('renders actual preview blocker messages and hides redacted evidence names', () => {
+  it('renders Core preview reason and message without reading legacy interview evidence', () => {
     const report = commandReportFixture(plan);
-    blockTarget(plan.versions[0], 'PAUSED_INTERVIEWS', 'PAUSED_INTERVIEWS (1); FUTURE_BACKEND_REASON');
+    blockTarget(plan.versions[0], 'HAS_INTERVIEWS', 'HAS_INTERVIEWS (1); FUTURE_BACKEND_REASON');
     plan.versions[0].assessment!.evidence = [
       {
         sourceId: '0Fo000000000001CAA',
@@ -948,28 +1097,55 @@ describe('flow version delete command', () => {
 
     const output = formatVersionDeleteReport(report);
 
-    expect(output).to.include('PAUSED_INTERVIEWS (1); FUTURE_BACKEND_REASON');
-    expect(output).to.include('Reference: FlowInterview | Details unavailable');
+    expect(output).to.include('HAS_INTERVIEWS (1); FUTURE_BACKEND_REASON');
+    expect(output).not.to.include('Reference:');
+    expect(output).not.to.include('0Fo000000000001CAA');
     expect(output).not.to.include('Hidden interview name');
     expect(plan.versions[0].assessment!.evidence[0].sourceName).to.equal('Hidden interview name');
   });
 
-  it('identifies a client last-version safeguard separately from a backend blocker', () => {
+  it('renders Core LAST_VERSION as the backend blocker', () => {
     const report = commandReportFixture(plan);
     report.deletion = deletion;
     report.outcome = 'FAILED';
     Object.assign(deletion.results[0], {
       state: 'BLOCKED',
-      source: 'CLIENT_POLICY',
+      source: 'CORE',
       targetDeleted: false,
-      error: { code: 'LAST_VERSION', message: 'The client preserves the last version pending product confirmation.' },
+      coreResult: {
+        versionId: deletion.results[0].versionId!,
+        outcome: 'BLOCKED',
+        reasonCode: 'LAST_VERSION',
+        message: 'The last remaining version cannot be deleted.',
+        evidence: [],
+      },
+      error: { code: 'LAST_VERSION', message: 'The last remaining version cannot be deleted.' },
     });
-
     const output = formatVersionDeleteReport(report);
+    expect(output).to.include('| BLOCKED');
+    expect(output).to.include('LAST_VERSION: The last remaining version cannot be deleted.');
+    expect(output).not.to.include('Client policy');
+  });
 
-    expect(output).to.include('Source: Client version-preservation safeguard (product policy pending)');
-    expect(output).to.include('LAST_VERSION');
-    expect(output).not.to.include('backend restriction');
+  it('preserves ALREADY_DELETED as successful Core output and exits successfully', async () => {
+    Object.assign(deletion.results[0], {
+      coreResult: {
+        versionId: deletion.results[0].versionId!,
+        outcome: 'DELETED',
+        reasonCode: 'ALREADY_DELETED',
+        message: 'This version is already deleted.',
+        evidence: [],
+      },
+    });
+    const result = await runNormal([...args, '--yes']);
+    expect(result.results[0].outcome).to.equal('succeeded');
+    expect(result.results[0].reasonCode).to.equal('ALREADY_DELETED');
+    expect(result.summary.succeeded).to.equal(1);
+    expect(String(log.firstCall.args[0])).to.include('| DELETED');
+    expect(String(log.firstCall.args[0])).to.include('ALREADY_DELETED: This version is already deleted.');
+    expect(process.exitCode).to.equal(0);
+    expect(validateReport(result), JSON.stringify(validateReport.errors)).to.equal(true);
+    expect(execute.calledOnce).to.equal(true);
   });
 
   it('removes ANSI and bidirectional controls from human output without changing JSON data', () => {
@@ -987,26 +1163,22 @@ describe('flow version delete command', () => {
     expect(report.targetOrg).to.include('\u001b');
   });
 
-  it('validates preview, cancelled and execution contract-2 reports against the strict schema', () => {
+  it('validates public preview, cancelled and execution reports against the command schema', () => {
     const preview = commandReportFixture(plan);
-    const cancelled = { ...preview, outcome: 'CANCELLED' };
-    const executed = { ...preview, confirmed: true, outcome: 'SUCCEEDED', deletion };
-
-    for (const report of [preview, cancelled, executed]) {
+    const cancelled: FlowVersionDeleteCommandReport = { ...preview, outcome: 'CANCELLED' };
+    const executed: FlowVersionDeleteCommandReport = { ...preview, confirmed: true, outcome: 'SUCCEEDED', deletion };
+    for (const internal of [preview, cancelled, executed]) {
+      const report = projectNormalReport(internal);
       expect(validateReport(report), JSON.stringify(validateReport.errors)).to.equal(true);
+      expect(report).not.to.have.property('plan');
+      expect(report).not.to.have.property('deletion');
     }
   });
 
-  it('rejects obsolete JSON contract 1, legacy DELETED state and unexpected properties', () => {
-    const preview = commandReportFixture(plan);
-    const oldContract = { ...preview, contractVersion: '1' };
-    expect(validateReport(oldContract)).to.equal(false);
-    const oldResult = structuredClone({ ...preview, confirmed: true, outcome: 'SUCCEEDED', deletion });
-    oldResult.deletion.results[0].state = 'DELETED' as (typeof oldResult.deletion.results)[0]['state'];
-    expect(validateReport(oldResult)).to.equal(false);
+  it('rejects obsolete public contracts, invalid outcomes and unexpected properties', () => {
+    const preview = projectNormalReport(commandReportFixture(plan));
+    expect(validateReport({ ...preview, contractVersion: '1' })).to.equal(false);
+    expect(validateReport({ ...preview, outcome: 'DELETED' })).to.equal(false);
     expect(validateReport({ ...preview, fabricatedBlockers: [] })).to.equal(false);
-    const badOutcome = structuredClone({ ...preview, confirmed: true, outcome: 'SUCCEEDED', deletion });
-    badOutcome.deletion.results[0].targetDeleted = false;
-    expect(validateReport(badOutcome)).to.equal(false);
   });
 });

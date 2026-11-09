@@ -18,12 +18,18 @@ import { stripVTControlCharacters } from 'node:util';
 import { Messages, SfError } from '@salesforce/core';
 import {
   ConnectFlowVersionListClient,
-  ConnectToolingFlowVersionDeleteClient,
+  ConnectFlowVersionDeleteClient,
   FlowVersionError,
   type FlowVersionDeleteResult,
 } from '@salesforce/flow-node';
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { ConfirmationPrompt } from '../../../ux/confirmation.js';
+import { ConfirmationTimeoutError } from '../../../ux/confirmationTimeout.js';
+import {
+  mutationExitCode,
+  projectPruneReport,
+  type FlowVersionMutationReport,
+} from '../../../reporters/flowVersionMutationReport.js';
 import {
   FlowVersionRetentionService,
   retentionPolicy,
@@ -44,7 +50,7 @@ export type FlowVersionPruneCommandReport = {
   apiVersion: string;
   dryRun: boolean;
   confirmed: boolean;
-  outcome: RetentionExecution['outcome'] | 'PREVIEWED' | 'CANCELLED';
+  outcome: RetentionExecution['outcome'] | 'PREVIEWED' | 'CANCELLED' | 'TIMED_OUT';
   plan: RetentionPlan;
   deletion: RetentionExecution | null;
 };
@@ -69,40 +75,24 @@ const versionLines = (row: RetentionVersion): string[] => {
   return lines;
 };
 const resultLines = (result: FlowVersionDeleteResult): string[] => {
-  const lines = [`  ${text(result.flowName)} v${result.versionNumber} | ${result.state}`];
-  if (result.error) lines.push(`    ${text(result.error.code)}: ${text(result.error.message)}`);
-  if (result.assessment?.outcome !== 'PASS' && result.assessment?.message)
-    lines.push(`    ${text(result.assessment.message)}`);
-  for (const evidence of result.assessment?.evidence ?? [])
-    lines.push(
-      `    Reference: ${text(evidence.sourceType)} | ${text(
-        evidence.detailsRedacted ? 'Details unavailable' : evidence.sourceName ?? evidence.sourceId
-      )}`
-    );
+  const core = result.coreResult;
+  const lines = [`  ${text(result.flowName)} v${result.versionNumber} | ${core?.outcome ?? result.state}`];
+  if (core) {
+    const detail = [core.reasonCode, core.message]
+      .filter((value) => value !== null)
+      .map(text)
+      .join(': ');
+    if (detail) lines.push(`    ${detail}`);
+  } else if (result.error) {
+    lines.push(`    ${text(result.error.code)}: ${text(result.error.message)}`);
+  }
   return lines;
 };
 
-const executionSummary = (
-  plan: RetentionPlan,
-  deletion: RetentionExecution
-): { outcome: RetentionExecution['outcome']; exitCode: 0 | 1 | 2 } => {
-  const error =
-    deletion.results.some((row) => ['FAILED', 'UNKNOWN', 'NOT_ATTEMPTED'].includes(row.state)) ||
-    plan.flows.some((flow) => flow.versions.some((row) => row.disposition === 'ERROR'));
-  const blocked =
-    deletion.results.some((row) => row.state === 'BLOCKED') ||
-    plan.flows.some((flow) => flow.versions.some((row) => row.disposition === 'BLOCKED'));
-  const exitCode = error ? 2 : blocked ? 1 : 0;
-  const outcome =
-    exitCode > 0 && deletion.outcome === 'SUCCEEDED'
-      ? deletion.results.some((row) => row.state === 'SUCCEEDED')
-        ? 'PARTIAL'
-        : 'FAILED'
-      : deletion.outcome;
-  return { outcome, exitCode };
-};
-
-export const formatVersionPruneReport = (report: FlowVersionPruneCommandReport): string => {
+export const formatVersionPruneReport = (
+  report: FlowVersionPruneCommandReport,
+  displayOutcome: string = report.outcome
+): string => {
   const lines = [
     '=== Flow version retention cleanup',
     `Target org: ${text(report.targetOrg)} | API: ${text(report.apiVersion)}`,
@@ -121,13 +111,13 @@ export const formatVersionPruneReport = (report: FlowVersionPruneCommandReport):
   const candidates = report.plan.flows
     .flatMap((flow) => flow.versions)
     .filter((row) => row.disposition === 'CANDIDATE').length;
-  lines.push('', `Cleanup candidates: ${candidates}`, `Outcome: ${report.outcome}`, retentionInterimNotice);
+  lines.push('', `Cleanup candidates: ${candidates}`, `Outcome: ${displayOutcome}`, retentionInterimNotice);
   if (report.dryRun || !report.confirmed) lines.push('No deletion requests were sent.');
   else for (const warning of report.deletion?.warnings ?? []) lines.push(`Warning: ${text(warning)}`);
   return `\n${lines.join('\n')}\n`;
 };
 
-export default class FlowVersionPrune extends SfCommand<FlowVersionPruneCommandReport> {
+export default class FlowVersionPrune extends SfCommand<FlowVersionMutationReport> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
@@ -138,41 +128,40 @@ export default class FlowVersionPrune extends SfCommand<FlowVersionPruneCommandR
     all: Flags.boolean({ default: false, exclusive: ['flow'], summary: messages.getMessage('flags.all.summary') }),
     'keep-latest': Flags.integer({ default: 5, summary: messages.getMessage('flags.keep-latest.summary') }),
     'older-than': Flags.string({ default: '90d', summary: messages.getMessage('flags.older-than.summary') }),
-    'dry-run': Flags.boolean({
+    'dry-run': Flags.boolean({ default: false, summary: messages.getMessage('flags.dry-run.summary') }),
+    execute: Flags.boolean({ default: false, summary: messages.getMessage('flags.execute.summary') }),
+    'no-prompt': Flags.boolean({
+      char: 'p',
+      aliases: ['yes'],
+      charAliases: ['y'],
+      deprecateAliases: true,
       default: false,
-      exclusive: ['execute', 'yes'],
-      summary: messages.getMessage('flags.dry-run.summary'),
-    }),
-    execute: Flags.boolean({
-      default: false,
-      exclusive: ['dry-run', 'yes'],
-      summary: messages.getMessage('flags.execute.summary'),
-    }),
-    yes: Flags.boolean({
-      char: 'y',
-      default: false,
-      exclusive: ['dry-run', 'execute'],
-      summary: messages.getMessage('flags.yes.summary'),
+      summary: messages.getMessage('flags.no-prompt.summary'),
     }),
   };
 
-  public async run(): Promise<FlowVersionPruneCommandReport> {
+  public async run(): Promise<FlowVersionMutationReport> {
     const { flags } = await this.parse(FlowVersionPrune);
-    if (!flags.flow && !flags.all) throw new SfError(messages.getMessage('scopeRequired'), 'FlowVersionScopeRequired');
+    if (!flags.flow && !flags.all) throw messages.createError('error.scopeRequired', [], [], 2);
     const policy = ((): RetentionPolicy => {
       try {
         return retentionPolicy(flags['keep-latest'], flags['older-than']);
       } catch (error) {
+        if (error instanceof FlowVersionError && error.code === 'INVALID_RETENTION_POLICY') {
+          throw messages.createError('error.invalidRetentionPolicy', [error.message], [], 2);
+        }
         return sdkError(error);
       }
     })();
-    if (flags.execute && (this.jsonEnabled() || !process.stdin.isTTY))
-      throw new SfError(messages.getMessage('confirmationRequired'), 'ConfirmationRequired');
+    const json = this.jsonEnabled();
+    const approved = flags['no-prompt'];
+    const canPrompt = !json && process.stdin.isTTY === true && process.stdout.isTTY === true;
+    const dryRun = flags['dry-run'] || !(flags.execute || approved) || (!approved && !canPrompt);
     const org = flags['target-org'];
     const connection = org.getConnection(flags['api-version']);
     const service = new FlowVersionRetentionService(
       new ConnectFlowVersionListClient(connection),
-      new ConnectToolingFlowVersionDeleteClient(connection)
+      new ConnectFlowVersionDeleteClient(connection)
     );
     const plan = await service
       .plan({ ...(flags.flow ? { flowName: flags.flow } : { all: true }) }, policy)
@@ -182,37 +171,45 @@ export default class FlowVersionPrune extends SfCommand<FlowVersionPruneCommandR
       mode: 'RETENTION',
       targetOrg: org.getUsername() ?? 'authenticated org',
       apiVersion: connection.getApiVersion(),
-      dryRun: !flags.execute && !flags.yes,
+      dryRun,
       confirmed: false,
       outcome: 'PREVIEWED',
       plan,
       deletion: null,
     };
-    if (report.dryRun) {
-      if (!this.jsonEnabled()) this.log(formatVersionPruneReport(report));
-      return report;
-    }
+    const finish = (display = true): FlowVersionMutationReport => {
+      const result = projectPruneReport(report);
+      process.exitCode = mutationExitCode(result);
+      if (display && !json) this.log(formatVersionPruneReport(report, result.outcome.toUpperCase()));
+      return result;
+    };
+    if (report.dryRun) return finish();
+
     const count = plan.flows.flatMap((flow) => flow.versions).filter((row) => row.disposition === 'CANDIDATE').length;
-    if (flags.execute && count > 0) {
+    if (!approved && count > 0) {
       this.log(formatVersionPruneReport(report));
-      const confirmed = await new ConfirmationPrompt().confirm({
-        message: messages.getMessage('confirmPrune', [count, report.targetOrg]),
-        ms: 60_000,
-        defaultAnswer: false,
-      });
+      let confirmed: boolean;
+      try {
+        confirmed = await new ConfirmationPrompt().confirm({
+          message: messages.getMessage('confirmPrune', [count, report.targetOrg]),
+          ms: 60_000,
+          defaultAnswer: false,
+        });
+      } catch (error) {
+        if (!(error instanceof ConfirmationTimeoutError)) throw error;
+        report.outcome = 'TIMED_OUT';
+        this.log(messages.getMessage('timedOut'));
+        return finish(false);
+      }
       if (!confirmed) {
         report.outcome = 'CANCELLED';
         this.log(messages.getMessage('cancelled'));
-        return report;
+        return finish(false);
       }
     }
     report.confirmed = count > 0;
     report.deletion = await service.execute(plan).catch(sdkError);
     report.outcome = report.deletion.outcome;
-    const summary = executionSummary(plan, report.deletion);
-    process.exitCode = summary.exitCode;
-    report.outcome = summary.outcome;
-    if (!this.jsonEnabled()) this.log(formatVersionPruneReport(report));
-    return report;
+    return finish();
   }
 }

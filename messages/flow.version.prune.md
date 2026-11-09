@@ -10,11 +10,11 @@ Keep the Active version, the latest N by version number (default 5), and the Obs
 
 Only inactive versions outside those protections, old enough according to Core's ageDays (default at least 90 UTC days), and marked PASS/deletable by Core are candidates. ERROR is not deletable. Incomplete catalogs or missing required policy metadata do not authorize deletion.
 
-Use --execute for an interactive confirmation, which defaults to no and allows 60 seconds. Use --yes to explicitly authorize non-interactive execution. These options and --dry-run are mutually exclusive. JSON/non-interactive execution requires --yes. Without either execution option, nothing is deleted, even in an interactive terminal.
+Use --execute for an interactive confirmation, which defaults to no and allows 60 seconds. Use --no-prompt (or -p) to approve the exact cleanup selection without prompting. The previous --yes and -y spellings remain compatibility aliases. Without either execution option, nothing is deleted, even in an interactive terminal. With --json or without interactive input and output terminals, --execute acts as a preview unless --no-prompt is also specified. An explicit --dry-run always previews, including when approval or execution flags are supplied.
 
-Execution preserves the exact previewed version IDs. Each candidate goes through the existing C2 normal-delete service: current identity, fresh deletion assessment, a fresh complete C1 retention check, and then Tooling DELETE only if still eligible. Known blocked and failed items do not stop eligible siblings. An unconfirmed deletion outcome or org-context change stops later mutations. Client checks cannot atomically reserve retention state against other writers. No force deletion, reference removal or interview abandonment is performed.
+Execution preserves the exact previewed version IDs. Each candidate goes through the C2 normal-delete service: current list-based identity, a fresh complete C1 retention check, and then the Core bulk-delete POST if the same exact version is still a cleanup candidate. Core performs mutation-time checks and returns its per-version outcome, reason and message. Known blocked and failed items do not stop eligible siblings. An unconfirmed deletion outcome or org-context change stops later mutations. Client checks cannot atomically reserve retention state against other writers. No force deletion, reference removal or interview abandonment is performed.
 
-JSON contract 1 includes the policy, every kept/candidate/blocked/error row with reasons, and execution results. A completed preview or cancellation exits 0. Execution exits 1 for blocked items and 2 for failed, unassessed or uncertain items. A whole-request failure is an error.
+JSON contract 3 returns results, summary, per-version blockingReasons, rule, impact and warnings. Internal prepared plans and deletion-service objects are not returned. A completed preview or successful execution exits 0. Wholly blocked, failed, uncertain or cancelled execution exits 1. Invalid usage exits 2, partial success exits 68, and an actual confirmation timeout exits 69. The standard JSON envelope status mirrors the exit code. Protected versions are reported as kept, and preview rows never count as successful deletions.
 
 # examples
 
@@ -32,7 +32,7 @@ JSON contract 1 includes the policy, every kept/candidate/blocked/error row with
 
 - Explicitly authorize org-wide cleanup and return JSON:
 
-  <%= config.bin %> <%= command.id %> --target-org my-org --all --keep-latest 5 --older-than 90d --yes --json
+  <%= config.bin %> <%= command.id %> --target-org my-org --all --keep-latest 5 --older-than 90d --no-prompt --json
 
 # flags.flow.summary
 
@@ -52,28 +52,40 @@ Minimum age in UTC days, such as 90d (inclusive; default 90d).
 
 # flags.dry-run.summary
 
-Explicitly preview the retention plan without deletion; preview is the default.
+Preview the retention plan without deletion; overrides execution and approval flags, and is the default.
 
 # flags.execute.summary
 
-Display the exact plan and request interactive confirmation before deletion.
+Request interactive confirmation; with JSON or no terminal, preview unless --no-prompt is supplied.
 
-# flags.yes.summary
+# flags.no-prompt.summary
 
-Explicitly authorize deletion of the planned cleanup candidates without prompting.
+Approve deletion of the exact cleanup candidates without prompting; --yes and -y remain compatibility aliases.
 
-# scopeRequired
+# error.scopeRequired
 
 Choose exactly one scope: --flow <API name> or --all.
 
-# confirmationRequired
+# error.scopeRequired.actions
 
-Non-interactive or JSON cleanup requires --yes. Omit execution options to preview first.
+Specify --flow with a Flow API name, or use --all to evaluate every Flow.
+
+# error.invalidRetentionPolicy
+
+%s
+
+# error.invalidRetentionPolicy.actions
+
+Use --keep-latest with an integer of at least 1 and --older-than with a duration such as 90d.
 
 # confirmPrune
 
-Delete these %s cleanup candidates from %s? Deletion cannot be undone. You have 60 seconds to respond; no response cancels. Each exact version is reassessed before deletion.
+Delete these %s cleanup candidates from %s? Deletion cannot be undone. You have 60 seconds to respond; without a response, no deletion requests are sent. Retention is checked again before each Core delete request.
 
 # cancelled
 
 Cleanup cancelled. No deletion requests were sent.
+
+# timedOut
+
+Cleanup confirmation timed out. No deletion requests were sent. Preview again before retrying.

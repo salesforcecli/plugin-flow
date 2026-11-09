@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+import { readFileSync } from 'node:fs';
+import Ajv from 'ajv';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import { Org, SfError } from '@salesforce/core';
@@ -214,10 +216,37 @@ describe('flow dependencies command', () => {
     expect(result.scannedFlows).to.deep.equal([report.root]);
     expect(result.warnings).to.deep.equal(report.warnings);
     expect(result.mcd).to.deep.equal(report.mcd);
+    const schema = JSON.parse(
+      readFileSync(new URL('../../../schemas/flow-dependencies.json', import.meta.url), 'utf8')
+    ) as object;
+    const validate = new Ajv({ allErrors: true }).compile(schema);
+    expect(validate(result), JSON.stringify(validate.errors)).to.equal(true);
     expect(log.called).to.equal(false);
     expect(logToStderr.called).to.equal(false);
     expect(logJson.calledOnce).to.equal(true);
   });
+
+  for (const status of ['partial', 'failed'] as const) {
+    it(`warns in human output when the dependency provider is ${status}, even with no reported relationships`, async () => {
+      report.mcd.status = status;
+      report.relationships = [];
+      report.warnings.push('Transport diagnostic: TEST_SENTINEL_AUTH');
+      const original = JSON.parse(JSON.stringify(report)) as DependencyReport;
+
+      const result = await Dependencies.run(['-o', 'source', '-f', 'Child']);
+
+      const output = String(log.firstCall.args[0]);
+      expect(output).to.include(`Warning: MetadataComponentDependency results are incomplete (status: ${status}).`);
+      expect(output).to.include('An empty section does not prove that no references exist.');
+      expect(output).to.include('Use --json for coverage details.');
+      expect(output).to.include('None reported within the inspected providers and scan scope.');
+      expect(output.indexOf('Warning:')).to.be.lessThan(output.indexOf('=== Incoming references'));
+      expect(output).not.to.include('TEST_SENTINEL_AUTH');
+      expect(report).to.deep.equal(original);
+      expect(result).to.deep.equal({ ...original, targetOrg: 'poc@example.com', apiVersion: '67.0' });
+      expect(logJson.called).to.equal(false);
+    });
+  }
 
   it('surrounds human errors with stderr blank lines while preserving the required-read error and exit code', async () => {
     analyze.rejects(new SfError('Flow was not readable.', 'FlowReadFailure', undefined, 7));
@@ -319,6 +348,7 @@ describe('flow dependencies command', () => {
     ]) {
       expect(text).not.to.include(omitted);
     }
+    expect(text).not.to.include('Warning: MetadataComponentDependency');
     expect(fullReport).to.deep.equal(original);
   });
 
@@ -343,5 +373,89 @@ describe('flow dependencies command', () => {
     const text = formatDependencyReport(unsafe);
     expect(text).not.to.include('\u001b');
     expect(text).to.include('Parent [31m Injected');
+  });
+});
+
+describe('Flow dependency JSON contract', () => {
+  // Generated from DependencyCommandReport with the schema tool's TypeScript generator.
+  const schema = JSON.parse(
+    readFileSync(new URL('../../../schemas/flow-dependencies.json', import.meta.url), 'utf8')
+  ) as object;
+  const validate = new Ajv({ allErrors: true }).compile(schema);
+  const commandReport = (): DependencyCommandReport => ({
+    ...reportFixture(),
+    targetOrg: 'source',
+    apiVersion: '67.0',
+  });
+
+  it('validates incoming and outgoing evidence without claiming an org-wide scan', () => {
+    const report = commandReport();
+    report.scannedFlows = [report.root];
+    report.relationships.push({
+      direction: 'outgoing',
+      callerType: 'Flow',
+      callerName: 'Child',
+      callerId: report.root.versionId,
+      callerVersion: 1,
+      callerStatus: 'Draft',
+      targetType: 'ApexClass',
+      targetName: 'ValidateAccount',
+      targetId: '01pxx000000AbCdAAK',
+      elementName: 'Validate_Account',
+      evidence: 'Flow.Metadata',
+    });
+    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    const unsupportedScope = { ...report, scope: { ...report.scope, orgWideComplete: true } };
+    expect(validate(unsupportedScope)).to.equal(false);
+  });
+
+  it('preserves partial or unavailable provider results and unnamed dependency records', () => {
+    for (const status of ['partial', 'failed'] as const) {
+      const report = commandReport();
+      report.mcd.status = status;
+      report.mcd.reportedEdges = [
+        {
+          MetadataComponentId: null,
+          MetadataComponentName: null,
+          MetadataComponentType: null,
+          MetadataComponentNamespace: null,
+          RefMetadataComponentId: report.root.definitionId,
+          RefMetadataComponentName: null,
+          RefMetadataComponentType: 'FlowDefinition',
+          RefMetadataComponentNamespace: null,
+        },
+      ];
+      report.relationships = [
+        {
+          direction: 'incoming',
+          callerType: '(unknown)',
+          callerName: '(unknown)',
+          targetType: 'FlowDefinition',
+          targetName: 'Child',
+          evidence: 'MetadataComponentDependency',
+        },
+      ];
+      report.warnings = ['The provider did not complete; these results do not prove the absence of references.'];
+      expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    }
+  });
+
+  it('rejects missing scope and malformed evidence rather than loosening the report contract', () => {
+    const missingScope = JSON.parse(JSON.stringify(commandReport())) as Record<string, unknown>;
+    delete missingScope.scope;
+    expect(validate(missingScope)).to.equal(false);
+    const report = commandReport();
+    const invalidEvidence = { ...report, relationships: [{ ...report.relationships[0], direction: 'both' }] };
+    expect(validate(invalidEvidence)).to.equal(false);
+  });
+
+  it('rejects additional auth or transport fields at every report boundary', () => {
+    const injectedReports = [
+      { ...commandReport(), accessToken: 'TEST_SENTINEL' },
+      { ...commandReport(), root: { ...reportFixture().root, refreshToken: 'TEST_SENTINEL' } },
+      { ...commandReport(), relationships: [{ ...reportFixture().relationships[0], password: 'TEST_SENTINEL' }] },
+      { ...commandReport(), mcd: { ...reportFixture().mcd, rawResponse: { authorization: 'TEST_SENTINEL' } } },
+    ];
+    for (const report of injectedReports) expect(validate(report)).to.equal(false);
   });
 });

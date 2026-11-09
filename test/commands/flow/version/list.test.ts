@@ -227,28 +227,41 @@ describe('flow version list command', () => {
     expect(logToStderr.called).to.equal(false);
     expect(logJson.firstCall.args[0]).to.deep.include({ status: 0, result });
   });
-  it('retains mixed PASS and ERROR rows in JSON and exits 1 after returning the report', async () => {
+  it('retains mixed PASS and ERROR rows in JSON and exits 68 after returning the report', async () => {
     const success = structuredClone(report.flows[0].versions[0]);
     errored(report);
     report.flows[0].versions.push({ ...success, versionNumber: 3, versionId: '301000000000003AAA' });
     report.returnedVersionCount = 2;
     const result = await FlowVersionList.run([...args, '--json']);
     expect(result.flows[0].versions).to.have.length(2);
-    expect(process.exitCode).to.equal(1);
-    expect(logJson.firstCall.args[0]).to.deep.include({ status: 1, result });
+    expect(process.exitCode).to.equal(68);
+    expect(logJson.firstCall.args[0]).to.deep.include({ status: 68, result });
   });
   it('does not treat BLOCKED alone as an operational failure', async () => {
     blocked(report);
     await FlowVersionList.run([...args, '--json']);
-    expect(process.exitCode).to.equal(undefined);
+    expect(process.exitCode).to.equal(0);
     expect(logJson.firstCall.args[0]).to.include({ status: 0 });
   });
   it('marks a server-truncated result incomplete in console and JSON exit status', async () => {
     report.listTruncated = true;
     const result = await FlowVersionList.run(args);
     expect(result.listTruncated).to.equal(true);
-    expect(process.exitCode).to.equal(1);
+    expect(process.exitCode).to.equal(68);
     expect(String(log.firstCall.args[0])).to.include('not a complete inventory');
+  });
+  it('returns exit 1 when every returned version has an assessment error', async () => {
+    errored(report);
+    const result = await FlowVersionList.run([...args, '--json']);
+    expect(process.exitCode).to.equal(1);
+    expect(logJson.firstCall.args[0]).to.deep.include({ status: 1, result });
+  });
+  it('returns exit 1 for an empty incomplete catalog, without claiming partial success', async () => {
+    report.flows = [];
+    report.returnedVersionCount = 0;
+    report.listTruncated = true;
+    await FlowVersionList.run([...args, '--json']);
+    expect(process.exitCode).to.equal(1);
   });
   it('keeps an actual zero limit and null percentage without inventing capacity errors', async () => {
     report.versionLimit = 0;
@@ -256,7 +269,7 @@ describe('flow version list command', () => {
     const result = await FlowVersionList.run([...args, '--json']);
     expect(result.versionLimit).to.equal(0);
     expect(result.flows[0].limitPercent).to.equal(null);
-    expect(process.exitCode).to.equal(undefined);
+    expect(process.exitCode).to.equal(0);
   });
   it('maps typed SDK validation and protocol failures to SfError', async () => {
     list.rejects(new FlowVersionError('INVALID_LIST_RESPONSE', 'List response rejected.'));
@@ -264,6 +277,30 @@ describe('flow version list command', () => {
     expect(error).to.be.instanceOf(SfError);
     expect((error as SfError).code).to.equal('INVALID_LIST_RESPONSE');
     expect(log.called).to.equal(false);
+  });
+  for (const commandArgs of [
+    ['-o', 'source', '--flow', 'bad flow'],
+    [...args, '--status', 'not-a-status'],
+    [...args, '--older-than', '90h'],
+    [...args, '--namespace', 'package'],
+  ]) {
+    it(`reports invalid client input as usage 2 without HTTP: ${commandArgs.slice(2).join(' ')}`, async () => {
+      list.restore();
+      const error = await expectError(commandArgs);
+      expect((error as SfError).exitCode).to.equal(2);
+      expect(request.called).to.equal(false);
+    });
+  }
+  it('rejects an unsupported selected API version as usage 2 before HTTP', async () => {
+    list.restore();
+    getConnection.returns({
+      getApiVersion: () => '66.0',
+      getAuthInfoFields: () => ({ orgId: '00D000000000001EAA' }),
+      request,
+    });
+    const error = await expectError(args, '67.0');
+    expect((error as SfError).exitCode).to.equal(2);
+    expect(request.called).to.equal(false);
   });
   it('preserves a normal SDK whole-request failure', async () => {
     list.rejects(new SfError('List request failed.', 'LIST_REQUEST_FAILED'));
@@ -279,7 +316,8 @@ describe('flow version list command', () => {
     expect(list.calledOnce).to.equal(true);
   });
   it('requires exactly one scope before opening a connection', async () => {
-    await expectError(['-o', 'source'], 'Choose exactly one scope');
+    const error = await expectError(['-o', 'source'], 'Choose exactly one scope');
+    expect((error as SfError).exitCode).to.equal(2);
     expect(list.called).to.equal(false);
     expect(getConnection.called).to.equal(false);
   });
@@ -290,7 +328,8 @@ describe('flow version list command', () => {
   });
   for (const value of ['-1', '101', '80.5', 'many']) {
     it(`rejects invalid --min-percent ${value}`, async () => {
-      await expectError([...args, '--min-percent', value]);
+      const error = await expectError([...args, '--min-percent', value]);
+      expect((error as SfError).exitCode ?? (error as { oclif?: { exit?: number } }).oclif?.exit).to.equal(2);
       expect(list.called).to.equal(false);
       expect(getConnection.called).to.equal(false);
     });
@@ -565,19 +604,50 @@ describe('Flow version list JSON contract', () => {
   const schema = JSON.parse(
     readFileSync(new URL('../../../../schemas/flow-version-list.json', import.meta.url), 'utf8')
   ) as object;
-  const validate = new Ajv({ allErrors: true }).compile(schema);
+  const validateGenerated = new Ajv({ allErrors: true }).compile(schema);
+  // Keep cross-field product invariants separate from the reproducible generated type schema.
+  const contract = JSON.parse(
+    readFileSync(new URL('../../../contracts/flow-version-list.json', import.meta.url), 'utf8')
+  ) as object;
+  const validate = new Ajv({ allErrors: true }).compile(contract);
+  const expectValidReport = (report: FlowVersionListCommandReport): void => {
+    expect(validateGenerated(report), JSON.stringify(validateGenerated.errors)).to.equal(true);
+    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+  };
+  it('validates a fixture-backed command JSON result against both contracts', async () => {
+    const sandbox = sinon.createSandbox();
+    const originalExitCode = process.exitCode;
+    try {
+      const ux = stubSfCommandUx(sandbox);
+      sandbox.stub(Org, 'create').resolves({
+        getConnection: () => ({ getApiVersion: () => '67.0' }),
+        getUsername: () => 'poc@example.com',
+      } as unknown as Org);
+      sandbox.stub(ConnectFlowVersionListClient.prototype, 'list').resolves(reportFixture());
+      const result = await FlowVersionList.run(['--target-org', 'fixture-org', '--flow', 'Invoice_Approval', '--json']);
+      expectValidReport(result);
+      expect(ux.logJson.firstCall.args[0]).to.deep.include({ status: 0, result });
+    } finally {
+      process.exitCode = originalExitCode;
+      sandbox.restore();
+    }
+  });
+  it('rejects structurally malformed output using the generated schema', () => {
+    const report = { ...commandReportFixture(), versionLimit: 'not-a-number' };
+    expect(validateGenerated(report)).to.equal(false);
+  });
   it('validates native grouped rows with authoritative counts and configured limit', () => {
     const report = commandReportFixture();
-    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    expectValidReport(report);
     expect(report.contractVersion).to.equal('1');
     expect(report.flows[0].versions[0]).not.to.have.property('assessment');
   });
   it('validates BLOCKED and ERROR without duplicated error collections', () => {
     const report = commandReportFixture();
     blocked(report);
-    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    expectValidReport(report);
     errored(report);
-    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    expectValidReport(report);
   });
   it('permits real null metadata and incomplete totals without guessing them', () => {
     const report = commandReportFixture();
@@ -590,14 +660,14 @@ describe('Flow version list JSON contract', () => {
       lastModifiedDate: null,
       ageDays: null,
     });
-    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    expectValidReport(report);
   });
   it('accepts a zero configured limit only with null percentage', () => {
     const report = commandReportFixture();
     report.versionLimit = 0;
     expect(validate(report)).to.equal(false);
     report.flows[0].limitPercent = null;
-    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    expectValidReport(report);
   });
   it('rejects contradictory eligibility outcomes', () => {
     const report = commandReportFixture();
@@ -638,7 +708,7 @@ describe('Flow version list JSON contract', () => {
     const report = commandReportFixture();
     report.listTruncated = true;
     report.candidateVersionCount = 2000;
-    expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
+    expectValidReport(report);
     expect(report).not.to.have.property('totalVersions');
   });
 });

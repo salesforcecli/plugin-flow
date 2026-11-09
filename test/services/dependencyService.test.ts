@@ -51,14 +51,15 @@ type DependencyRecord = {
 };
 
 type MockOptions = {
+  definitionError?: unknown;
   definitions?: Record<string, DefinitionRecord[]>;
   versions?: Record<string, FlowRecord[]>;
   dependencyRecords?: DependencyRecord[];
-  dependencyError?: Error;
+  dependencyError?: unknown;
   dependencyFailureFor?: RegExp;
   dependencyDone?: boolean;
   dependencyTotalSize?: number;
-  versionError?: Error;
+  versionError?: unknown;
 };
 
 const subflowElement = {
@@ -111,6 +112,11 @@ const dependencyRecord: DependencyRecord = {
   RefMetadataComponentNamespace: null,
 };
 
+function rejectNativeQuery(reason: unknown): never {
+  // Native API clients can reject with REST error records or arrays instead of Error instances.
+  throw reason;
+}
+
 function mockQueryClient(options: MockOptions = {}): { client: ToolingQueryClient; queries: string[] } {
   const queries: string[] = [];
   const definitions = options.definitions ?? { [CHILD_NAME]: [childDefinition], [PARENT_NAME]: [parentDefinition] };
@@ -124,7 +130,7 @@ function mockQueryClient(options: MockOptions = {}): { client: ToolingQueryClien
       let records: unknown[];
       if (/FROM MetadataComponentDependency\b/i.test(soql)) {
         if (options.dependencyError && (!options.dependencyFailureFor || options.dependencyFailureFor.test(soql))) {
-          throw options.dependencyError;
+          rejectNativeQuery(options.dependencyError);
         }
         const predicate = /WHERE\s+(MetadataComponentId|RefMetadataComponentId)\s*=\s*'([^']+)'/i.exec(soql);
         if (!predicate) throw new Error(`Unbounded dependency query in test: ${soql}`);
@@ -137,11 +143,12 @@ function mockQueryClient(options: MockOptions = {}): { client: ToolingQueryClien
         };
       }
       if (/FROM FlowDefinition\b/i.test(soql)) {
+        if (options.definitionError) rejectNativeQuery(options.definitionError);
         const name = /DeveloperName\s*=\s*'([^']+)'/i.exec(soql)?.[1];
         if (!name) throw new Error(`Unbounded FlowDefinition query in test: ${soql}`);
         records = definitions[name] ?? [];
       } else if (/FROM Flow\b/i.test(soql)) {
-        if (options.versionError) throw options.versionError;
+        if (options.versionError) rejectNativeQuery(options.versionError);
         const id = /WHERE\s+Id\s*=\s*'([^']+)'/i.exec(soql)?.[1];
         if (!id) throw new Error(`Unbounded Flow query in test: ${soql}`);
         records = versions[id] ?? [];
@@ -341,7 +348,7 @@ describe('DependencyService', () => {
     const { client } = mockQueryClient({ versionError: new Error('Required Flow read denied') });
     await expectFailure(
       () => new DependencyService(client).analyze({ flowName: CHILD_NAME }),
-      /Required Flow read denied/i
+      /Required Flow metadata.*could not be read/i
     );
   });
 
@@ -480,7 +487,7 @@ describe('DependencyService', () => {
     const result = await new DependencyService(client).analyze({ flowName: PARENT_NAME });
 
     expect(result.mcd.status).to.equal('failed');
-    expect(result.warnings.join(' ')).to.match(/Dependency API unavailable/);
+    expect(result.warnings.join(' ')).to.match(/MetadataComponentDependency.*failed/);
     expect(result.relationships).to.have.length(1);
     expect(result.relationships[0].evidence).to.equal('Flow.Metadata');
     expect(result.scope.orgWideComplete).to.equal(false);
@@ -495,7 +502,7 @@ describe('DependencyService', () => {
 
     expect(result.mcd.status).to.equal('partial');
     expect(result.mcd.queryCount).to.equal(4);
-    expect(result.warnings.join(' ')).to.match(/One dependency query failed/);
+    expect(result.warnings.join(' ')).to.match(/MetadataComponentDependency.*failed/);
   });
 
   it('should preserve an API-reported Apex caller as supplementary incoming evidence without claiming a source scan', async () => {
@@ -550,5 +557,70 @@ describe('DependencyService', () => {
     expect(result.mcd.reportedEdges).to.deep.equal([dependencyRecord]);
     expect(result.mcd.queryCount).to.equal(4);
     expect(result.mcd.status).to.equal('success');
+  });
+});
+
+describe('DependencyService query diagnostics', () => {
+  const unsafeDiagnostics = () =>
+    Object.assign(new Error('Authorization: Bearer TEST_SENTINEL https://example.invalid/?password=TEST_SENTINEL'), {
+      errorCode: 'INVALID_SESSION_ID',
+      statusCode: 401,
+      body: '<html>TEST_SENTINEL</html>',
+      query: 'SELECT TEST_SENTINEL',
+      cause: new Error('refreshToken=TEST_SENTINEL'),
+    });
+
+  for (const stage of ['definition', 'version'] as const) {
+    it(`sanitizes the required ${stage} read and stops subsequent requests`, async () => {
+      const { client, queries } = mockQueryClient({ [`${stage}Error`]: unsafeDiagnostics() });
+      let failure: unknown;
+      try {
+        await new DependencyService(client).analyze({ flowName: CHILD_NAME });
+      } catch (error) {
+        failure = error;
+      }
+      expect(failure).to.be.instanceOf(Error);
+      const message = (failure as Error).message;
+      expect(message).to.include('Required Flow metadata');
+      expect(message).to.include('INVALID_SESSION_ID');
+      expect(message).to.include('HTTP 401');
+      expect(JSON.stringify(failure)).not.to.include('TEST_SENTINEL');
+      expect(message).not.to.include('TEST_SENTINEL');
+      expect((failure as Error).cause).to.equal(undefined);
+      expect(queries).to.have.length(stage === 'definition' ? 1 : 2);
+    });
+  }
+
+  it('keeps optional-provider failure distinct from no references without returning raw diagnostics', async () => {
+    const { client } = mockQueryClient({ dependencyError: unsafeDiagnostics() });
+    const report = await new DependencyService(client).analyze({ flowName: PARENT_NAME });
+    expect(report.mcd.status).to.equal('failed');
+    expect(report.relationships).to.have.length(1);
+    expect(report.warnings.join(' ')).to.include('INVALID_SESSION_ID; HTTP 401');
+    expect(report.warnings.join(' ')).to.include('results are incomplete');
+    expect(JSON.stringify(report)).not.to.include('TEST_SENTINEL');
+    expect(JSON.stringify(report)).not.to.include('example.invalid');
+  });
+
+  it('does not accept arbitrary strings as trusted error codes or status metadata', async () => {
+    const { client } = mockQueryClient({
+      dependencyError: {
+        errorCode: 'TEST_SENTINEL',
+        statusCode: '401 TEST_SENTINEL',
+        message: 'TEST_SENTINEL',
+        cause: { accessToken: 'TEST_SENTINEL' },
+      },
+    });
+    const report = await new DependencyService(client).analyze({ flowName: CHILD_NAME });
+    expect(report.mcd.status).to.equal('failed');
+    expect(JSON.stringify(report)).not.to.include('TEST_SENTINEL');
+    expect(report.warnings.join(' ')).to.include('Check the org connection');
+  });
+
+  it('accepts native error arrays while retaining only allowlisted diagnostics', async () => {
+    const { client } = mockQueryClient({ dependencyError: [{ errorCode: 'INVALID_TYPE', message: 'TEST_SENTINEL' }] });
+    const report = await new DependencyService(client).analyze({ flowName: CHILD_NAME });
+    expect(report.warnings.join(' ')).to.include('(INVALID_TYPE)');
+    expect(JSON.stringify(report)).not.to.include('TEST_SENTINEL');
   });
 });

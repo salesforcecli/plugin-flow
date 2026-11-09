@@ -18,6 +18,7 @@ import { spawn, spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { expect } from 'chai';
 import sinon from 'sinon';
+import { ConfirmationTimeoutError } from '../../src/ux/confirmationTimeout.js';
 import {
   ForceDeleteConfirmationPrompt,
   type ForceDeleteConfirmationOptions,
@@ -33,6 +34,8 @@ const options = (): ForceDeleteConfirmationOptions => ({
 
 type ChildResult = {
   confirmed: boolean;
+  timedOut: boolean;
+  exitCode: number;
   mutations: number;
   inputPaused: boolean;
   inputIsTTY: boolean;
@@ -74,11 +77,12 @@ async function runRealPrompt(mode: string): Promise<ChildResult> {
       clearTimeout(watchdog);
       try {
         expect(signal, stderr).to.equal(null);
-        expect(code, stderr).to.equal(0);
         expect(child.stdin.writableEnded, 'the parent leaves the PTY runner input open').to.equal(false);
         const serialized = /FORCE_CONFIRMATION_RESULT:(\{[^\r\n]+\})/.exec(output)?.[1];
         if (!serialized) throw new Error(`Missing confirmation result: ${output}`);
-        resolve(JSON.parse(serialized) as ChildResult);
+        const result = JSON.parse(serialized) as Omit<ChildResult, 'exitCode'>;
+        expect(code, stderr).to.equal(result.timedOut ? 69 : result.confirmed ? 0 : 1);
+        resolve({ ...result, exitCode: code! });
       } catch (error) {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -238,15 +242,34 @@ describe('ForceDeleteConfirmationPrompt', () => {
           );
         })
     );
-    const confirmation = new ForceDeleteConfirmationPrompt(prompt).confirm(options());
+    const confirmation = new ForceDeleteConfirmationPrompt(prompt).confirm(options()).catch((error: unknown) => error);
     await clock.tickAsync(90_000);
     expect(prompt.callCount).to.equal(2);
     await clock.tickAsync(29_999);
     expect(prompt.secondCall.args[1].signal.aborted).to.equal(false);
     await clock.tickAsync(1);
-    expect(await confirmation).to.equal(false);
+    expect(await confirmation).to.be.instanceOf(ConfirmationTimeoutError);
     expect(clock.countTimers()).to.equal(0);
   });
+
+  for (const phase of ['flow', 'version']) {
+    it(`rejects a late ${phase} answer from a prompt that ignores cancellation`, async () => {
+      const clock = sandbox.useFakeTimers();
+      const lateAnswer = async (): Promise<string> => {
+        await new Promise((resolve) => setTimeout(resolve, 51));
+        return phase === 'flow' ? 'Fixture_Flow' : '12';
+      };
+      if (phase === 'flow') prompt.onFirstCall().callsFake(lateAnswer);
+      else prompt.onSecondCall().callsFake(lateAnswer);
+      const confirmation = new ForceDeleteConfirmationPrompt(prompt)
+        .confirm({ ...options(), ms: 50 })
+        .catch((error: unknown) => error);
+      await clock.tickAsync(51);
+      expect(await confirmation).to.be.instanceOf(ConfirmationTimeoutError);
+      expect(prompt.callCount).to.equal(phase === 'flow' ? 1 : 2);
+      expect(clock.countTimers()).to.equal(0);
+    });
+  }
 
   it('cleans up its deadline when the user cancels', async () => {
     const clock = sandbox.useFakeTimers();
@@ -306,6 +329,8 @@ describe('ForceDeleteConfirmationPrompt', () => {
     ptyTest(`releases the real terminal after ${mode} (requires POSIX PTY and Python3)`, async () => {
       expect(await runRealPrompt(mode)).to.deep.equal({
         confirmed: mode === 'match' || mode === 'stderr-match',
+        timedOut: mode.startsWith('timeout'),
+        exitCode: mode.startsWith('timeout') ? 69 : mode === 'match' || mode === 'stderr-match' ? 0 : 1,
         mutations: mode === 'match' || mode === 'stderr-match' ? 1 : 0,
         inputPaused: true,
         inputIsTTY: true,

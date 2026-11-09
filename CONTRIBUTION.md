@@ -44,3 +44,7 @@ Agreement. You can do so by going to https://cla.salesforce.com/sign-cla.
 ### Merging Pull Requests
 
 - Pull request merging is restricted to squash & merge only.
+
+### Flow version integration testing
+
+See [Flow version command integration tests](contributing/flow-version-testing.md) for the explicit fixture prerequisites and dedicated read-only NUT command.

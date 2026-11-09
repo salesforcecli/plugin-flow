@@ -15,6 +15,7 @@
  */
 
 import inquirerConfirm from '@inquirer/confirm';
+import { ConfirmationTimeoutError } from './confirmationTimeout.js';
 
 export type ConfirmationOptions = {
   message: string;
@@ -27,18 +28,19 @@ export class ConfirmationPrompt {
 
   public async confirm({ message, ms = 60_000, defaultAnswer = false }: ConfirmationOptions): Promise<boolean> {
     if (defaultAnswer) throw new TypeError('Confirmation prompts require a false default answer.');
+    if (!Number.isSafeInteger(ms) || ms <= 0 || ms > 2_147_483_647)
+      throw new TypeError('The confirmation deadline must be a positive supported number of milliseconds.');
 
     const controller = new AbortController();
     const deadline = setTimeout(() => controller.abort(), ms);
     try {
-      return await this.prompt({ message, default: false }, { signal: controller.signal });
+      const confirmed = await this.prompt({ message, default: false }, { signal: controller.signal });
+      if (controller.signal.aborted) throw new ConfirmationTimeoutError();
+      return confirmed;
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.name === 'ExitPromptError' || (error.name === 'AbortPromptError' && controller.signal.aborted))
-      ) {
-        return false;
-      }
+      if (error instanceof Error && error.name === 'AbortPromptError' && controller.signal.aborted)
+        throw new ConfirmationTimeoutError();
+      if (error instanceof Error && error.name === 'ExitPromptError') return false;
       throw error;
     } finally {
       clearTimeout(deadline);

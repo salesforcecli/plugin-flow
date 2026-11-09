@@ -22,6 +22,7 @@ import {
   type ConnectFlowVersionListReport,
   type ConnectFlowVersionListVersion,
   type FlowVersionAssessmentTarget,
+  type FlowVersionCoreDeleteResult,
 } from '@salesforce/flow-node';
 import {
   classifyRetentionFlow,
@@ -220,21 +221,20 @@ describe('C4 retention execution', () => {
     current = report([row(3), row(2), row(1)]);
     currentOrg = orgId;
     list = sandbox.stub().callsFake(() => structuredClone(current));
-    assess = sandbox.stub().callsFake((targets: FlowVersionAssessmentTarget[]) =>
-      targets.map((target) => ({
-        versionId: target.versionId,
-        outcome: 'PASS',
-        reasonCode: null,
-        message: null,
-        evidence: [],
-      }))
-    );
-    remove = sandbox.stub().callsFake((versionId: string) => {
-      const flow = current.flows[0];
-      flow.versions = flow.versions.filter((version) => version.versionId !== versionId);
-      flow.versionCount = flow.versions.length;
-      flow.limitPercent = flow.versions.length * 2;
-      current.candidateVersionCount = current.returnedVersionCount = flow.versions.length;
+    assess = sandbox.stub().throws('Real C4 execution must not request a separate delete preview');
+    remove = sandbox.stub().callsFake((targets: readonly FlowVersionAssessmentTarget[]) => {
+      const results: FlowVersionCoreDeleteResult[] = targets.map((target) => {
+        const flow = current.flows.find((item) => item.definitionId === target.expectedDefinitionId)!;
+        flow.versions = flow.versions.filter((version) => version.versionId !== target.versionId);
+        flow.versionCount = flow.versions.length;
+        flow.limitPercent = flow.versions.length * 2;
+        return { versionId: target.versionId, outcome: 'DELETED', reasonCode: null, message: null, evidence: [] };
+      });
+      current.candidateVersionCount = current.returnedVersionCount = current.flows.reduce(
+        (count, flow) => count + flow.versions.length,
+        0
+      );
+      return Promise.resolve(results);
     });
     service = new FlowVersionRetentionService(
       { list },
@@ -242,7 +242,7 @@ describe('C4 retention execution', () => {
         getOrgId: () => currentOrg,
         inventory: sandbox.stub().throws('C4 does not guess namespace'),
         assessVersions: assess,
-        deleteVersion: remove,
+        deleteVersions: remove,
       }
     );
   });
@@ -282,12 +282,16 @@ describe('C4 retention execution', () => {
     expect(remove.called).to.equal(false);
   });
 
-  it('reuses C2 assessment and Tooling deletion for exact approved IDs, including fully qualified API names', async () => {
+  it('reuses Core deletion for exact approved IDs without a preview round, including fully qualified API names', async () => {
     const plan = await service.plan({ flowName: 'billing__Invoice' }, policy);
     const result = await service.execute(plan);
     expect(result.outcome).to.equal('SUCCEEDED');
     expect(result.results.map((item) => item.versionNumber)).to.deep.equal([1, 2]);
-    expect(remove.args).to.deep.equal([[row(1).versionId], [row(2).versionId]]);
+    expect(remove.args).to.deep.equal([
+      [[{ versionId: row(1).versionId, expectedDefinitionId: definitionId }]],
+      [[{ versionId: row(2).versionId, expectedDefinitionId: definitionId }]],
+    ]);
+    expect(assess.called).to.equal(false);
     expect(list.callCount).to.be.greaterThan(3);
     expect(list.args.every(([input]) => !('status' in input) && !('deletable' in input))).to.equal(true);
     expect(current.flows[0].versions.map((item) => item.versionNumber)).to.deep.equal([3]);
@@ -299,68 +303,92 @@ describe('C4 retention execution', () => {
     const result = await service.execute(plan);
     expect(result.results.map((item) => item.state)).to.deep.equal(['FAILED', 'SUCCEEDED']);
     expect(result.results[0].error?.code).to.equal('TARGET_CHANGED');
-    expect(remove.args).to.deep.equal([[row(2).versionId]]);
+    expect(remove.args).to.deep.equal([[[{ versionId: row(2).versionId, expectedDefinitionId: definitionId }]]]);
   });
 
-  it('fresh retention check protects a candidate that became the rollback target after fresh PASS', async () => {
+  it('fresh retention check protects a candidate that became the rollback target before Core deletion', async () => {
     const plan = await service.plan({ all: true }, policy);
-    assess.callsFake((targets: FlowVersionAssessmentTarget[]) => {
-      if (targets.length === 1 && targets[0].versionId === row(1).versionId) {
-        current.flows[0].versions[2].status = 'Obsolete';
-        current.flows[0].versions[2].statusChangeDate = '2026-10-27T12:00:00Z';
-      }
-      return targets.map((target) => ({
-        versionId: target.versionId,
-        outcome: 'PASS',
-        reasonCode: null,
-        message: null,
-        evidence: [],
-      }));
+    // Execution resolves the exact ID first; the following read is the retention-policy recheck.
+    list.onCall(list.callCount + 1).callsFake(() => {
+      current.flows[0].versions[2].status = 'Obsolete';
+      current.flows[0].versions[2].statusChangeDate = '2026-10-27T12:00:00Z';
+      return structuredClone(current);
     });
     const result = await service.execute(plan);
     expect(result.results.map((item) => item.state)).to.deep.equal(['BLOCKED', 'SUCCEEDED']);
     expect(result.results[0].source).to.equal('CLIENT_POLICY');
-    expect(remove.args).to.deep.equal([[row(2).versionId]]);
+    expect(remove.args).to.deep.equal([[[{ versionId: row(2).versionId, expectedDefinitionId: definitionId }]]]);
+    expect(assess.called).to.equal(false);
   });
 
-  it('keeps fresh assessment ERROR distinct from a blocker and continues an eligible sibling', async () => {
+  it('keeps a fresh catalog assessment error distinct from a blocker and continues an eligible sibling', async () => {
     const plan = await service.plan({ all: true }, policy);
-    assess.callsFake((targets: FlowVersionAssessmentTarget[]) => {
-      if (targets.length === 1 && targets[0].versionId === row(1).versionId) {
-        Object.assign(current.flows[0].versions[2], { outcome: 'ERROR', deletable: false, reasonCode: 'OPERATIONAL' });
-      }
-      return targets.map((target) => ({
-        versionId: target.versionId,
-        outcome: 'PASS',
-        reasonCode: null,
-        message: null,
-        evidence: [],
-      }));
+    list.onCall(list.callCount + 1).callsFake(() => {
+      Object.assign(current.flows[0].versions[2], { outcome: 'ERROR', deletable: false, reasonCode: 'DELETE_ERROR' });
+      return structuredClone(current);
     });
     const result = await service.execute(plan);
     expect(result.results.map((item) => item.state)).to.deep.equal(['FAILED', 'SUCCEEDED']);
     expect(result.results[0].error?.code).to.equal('RETENTION_RECHECK_ERROR');
-    expect(remove.args).to.deep.equal([[row(2).versionId]]);
+    expect(remove.args).to.deep.equal([[[{ versionId: row(2).versionId, expectedDefinitionId: definitionId }]]]);
+    expect(assess.called).to.equal(false);
   });
 
-  it('retains actual fresh backend blocker evidence while continuing eligible siblings', async () => {
+  it('retains actual Core blocker results while continuing eligible siblings', async () => {
     const plan = await service.plan({ all: true }, policy);
-    assess.callsFake((targets: FlowVersionAssessmentTarget[]) =>
-      targets.map((target) => ({
-        versionId: target.versionId,
-        outcome: target.versionId === row(1).versionId ? 'BLOCKED' : 'PASS',
-        reasonCode: target.versionId === row(1).versionId ? 'PAUSED_INTERVIEWS' : null,
-        message: target.versionId === row(1).versionId ? 'PAUSED_INTERVIEWS (1)' : null,
-        evidence: [],
-      }))
+    remove.callsFake((targets: readonly FlowVersionAssessmentTarget[]) =>
+      Promise.resolve(
+        targets.map(
+          (target): FlowVersionCoreDeleteResult => ({
+            versionId: target.versionId,
+            outcome: target.versionId === row(1).versionId ? 'BLOCKED' : 'DELETED',
+            reasonCode: target.versionId === row(1).versionId ? 'HAS_INTERVIEWS' : null,
+            message: target.versionId === row(1).versionId ? 'Saved interviews still point at this version.' : null,
+            evidence: [],
+          })
+        )
+      )
     );
     const result = await service.execute(plan);
     expect(result.results.map((item) => item.state)).to.deep.equal(['BLOCKED', 'SUCCEEDED']);
-    expect(result.results[0].assessment?.message).to.equal('PAUSED_INTERVIEWS (1)');
-    expect(remove.args).to.deep.equal([[row(2).versionId]]);
+    expect(result.results[0].source).to.equal('CORE');
+    expect(result.results[0].coreResult).to.include({
+      outcome: 'BLOCKED',
+      reasonCode: 'HAS_INTERVIEWS',
+      message: 'Saved interviews still point at this version.',
+    });
+    expect(result.results[0].coreResult?.evidence).to.deep.equal([]);
+    expect(remove.args).to.deep.equal([
+      [[{ versionId: row(1).versionId, expectedDefinitionId: definitionId }]],
+      [[{ versionId: row(2).versionId, expectedDefinitionId: definitionId }]],
+    ]);
+    expect(assess.called).to.equal(false);
   });
 
-  it('stops all later flows after an uncertain DELETE', async () => {
+  it('preserves a Core error outcome and continues the next approved retention candidate', async () => {
+    const plan = await service.plan({ all: true }, policy);
+    remove.callsFake((targets: readonly FlowVersionAssessmentTarget[]) =>
+      Promise.resolve(
+        targets.map(
+          (target): FlowVersionCoreDeleteResult => ({
+            versionId: target.versionId,
+            outcome: target.versionId === row(1).versionId ? 'ERROR' : 'DELETED',
+            reasonCode: target.versionId === row(1).versionId ? 'DELETE_ERROR' : null,
+            message: target.versionId === row(1).versionId ? 'The version could not be deleted.' : null,
+            evidence: [],
+          })
+        )
+      )
+    );
+    const result = await service.execute(plan);
+    expect(result.results.map((item) => item.state)).to.deep.equal(['FAILED', 'SUCCEEDED']);
+    expect(result.results[0].source).to.equal('CORE');
+    expect(result.results[0].coreResult?.outcome).to.equal('ERROR');
+    expect(result.results[0].error?.code).to.equal('DELETE_ERROR');
+    expect(remove.callCount).to.equal(2);
+  });
+
+  it('stops all later flows after an uncertain Core bulk-delete request', async () => {
     const second = {
       ...structuredClone(current.flows[0]),
       definitionId: checksum('300000000000002'),

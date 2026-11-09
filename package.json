@@ -8,7 +8,7 @@
     "@oclif/core": "^5.0.0",
     "@salesforce/apex-node": "^9.0.7",
     "@salesforce/core": "^9.1.9",
-    "@salesforce/flow-node": "git+https://github.com/forcedotcom/flows.git#98a0fe5a2611d20cf62c589388b3f887394162f4",
+    "@salesforce/flow-node": "git+https://github.com/forcedotcom/flows.git#fef552379bb1191dfd307a6385c00abe59055076",
     "@salesforce/kit": "^4.0.0",
     "@salesforce/sf-plugins-core": "^13.0.4",
     "ansis": "^3.17.0"
@@ -97,7 +97,8 @@
     "test": "wireit",
     "test:nuts": "nyc mocha \"**/*.nut.ts\" --slow 4500 --timeout 600000 --parallel",
     "test:only": "wireit",
-    "version": "oclif readme"
+    "version": "oclif readme",
+    "test:nuts:flow-versions": "mocha \"test/commands/flow/version/**/*.nut.ts\" --timeout 120000"
   },
   "publishConfig": {
     "access": "public"
@@ -170,6 +171,9 @@
       "files": [
         "test/**/*.ts",
         "test/**/*.mjs",
+        "test/**/*.py",
+        "schemas/**/*.json",
+        "test/contracts/**/*.json",
         "src/**/*.ts",
         "**/tsconfig.json",
         ".mocha*",
@@ -224,5 +228,5 @@
   },
   "exports": "./lib/index.js",
   "type": "module",
-  "author": "Susan Gao"
+  "author": "Salesforce"
 }

@@ -41,3 +41,20 @@ Additional caller Flow DeveloperName to inspect; repeat for more Flows (20 total
 # flags.version-policy.summary
 
 Select the latest or active version of each explicitly named Flow.
+
+
+# error.flowReadFailed
+
+Required Flow metadata for %s could not be read%s. No dependency analysis was completed.
+
+# error.flowReadFailed.actions
+
+- Check the target org connection, Flow access, and API version, then retry the command.
+
+# warning.dependencyQueryFailed
+
+MetadataComponentDependency %s query for %s failed%s. This provider's results are incomplete. Check the org connection, dependency API access, and API version, then retry.
+
+# warning.dependencyProviderIncomplete
+
+Warning: MetadataComponentDependency results are incomplete (status: %s). An empty section does not prove that no references exist. Use --json for coverage details.

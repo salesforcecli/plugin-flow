@@ -68,10 +68,26 @@ Show Flows at or above this percentage of their configured version limit (0-100)
 
 Show backend PASS versions; the server retains assessment errors.
 
-# scopeRequired
+# error.scopeRequired
 
 Choose exactly one scope: --flow <Flow API name> or --all.
 
-# invalidMinPercent
+# error.invalidMinPercent
 
 --min-percent must be an integer from 0 to 100.
+
+# error.scopeRequired.actions
+
+Specify --flow <Flow API name> or --all.
+
+# error.invalidMinPercent.actions
+
+Set --min-percent to an integer from 0 through 100.
+
+# error.invalidInput
+
+%s
+
+# error.invalidInput.actions
+
+Check the Flow name and filter options. Use API version 67.0 or later and a qualified Flow name for namespaced Flows.

@@ -1,0 +1,343 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlowVersionListCommandReport",
+  "description": "C1 version list from the Core Connect list contract, with authenticated CLI scope metadata. Counts, limits and outcomes are server values.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "orgId",
+    "generatedAt",
+    "targetOrg",
+    "apiVersion",
+    "scope",
+    "filters",
+    "versionLimit",
+    "returnedVersionCount",
+    "candidateVersionCount",
+    "listTruncated",
+    "catalogComplete",
+    "nextOffset",
+    "flows"
+  ],
+  "properties": {
+    "contractVersion": {
+      "const": "1"
+    },
+    "orgId": {
+      "type": "string",
+      "pattern": "^00D[A-Za-z0-9]{15}$"
+    },
+    "generatedAt": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "targetOrg": {
+      "type": "string"
+    },
+    "apiVersion": {
+      "type": "string"
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["all", "flowName", "namespace", "allNamespaces"],
+      "properties": {
+        "all": {
+          "type": "boolean"
+        },
+        "flowName": {
+          "type": ["string", "null"]
+        },
+        "namespace": {
+          "type": "null"
+        },
+        "allNamespaces": {
+          "type": "boolean"
+        }
+      }
+    },
+    "filters": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["status", "olderThan", "minPercent", "deletable"],
+      "properties": {
+        "status": {
+          "type": ["string", "null"]
+        },
+        "olderThan": {
+          "type": ["string", "null"]
+        },
+        "minPercent": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "maximum": 100
+        },
+        "deletable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "versionLimit": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "returnedVersionCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "candidateVersionCount": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "listTruncated": {
+      "type": "boolean"
+    },
+    "catalogComplete": {
+      "type": "boolean",
+      "description": "True only for an unfiltered, fully paged catalog whose terminal page and whole-Flow counts prove completeness."
+    },
+    "nextOffset": {
+      "type": "null"
+    },
+    "flows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Flow"
+      }
+    }
+  },
+  "definitions": {
+    "Version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "versionId",
+        "versionNumber",
+        "versionName",
+        "status",
+        "createdDate",
+        "ageDays",
+        "createdById",
+        "createdByName",
+        "lastModifiedDate",
+        "referenceCount",
+        "pausedInterviewCount",
+        "failedInterviewCount",
+        "deletable",
+        "outcome",
+        "reasonCode",
+        "message"
+      ],
+      "properties": {
+        "versionId": {
+          "type": "string",
+          "pattern": "^301[A-Za-z0-9]{15}$"
+        },
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "createdDate": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "ageDays": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "createdById": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^005[A-Za-z0-9]{15}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "createdByName": {
+          "type": ["string", "null"]
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "statusChangeDate": {
+          "type": ["string", "null"],
+          "format": "date-time",
+          "description": "Stored UTC status-change timestamp; null means no stored value. Omitted by older Core builds."
+        },
+        "referenceCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "pausedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "failedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "deletable": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "PASS"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "deletable": {
+                "const": true
+              },
+              "reasonCode": {
+                "type": "null"
+              },
+              "message": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["BLOCKED", "ERROR"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "deletable": {
+                "const": false
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "enum": ["PASS", "BLOCKED"]
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "referenceCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "pausedInterviewCount": {
+                "type": "integer",
+                "minimum": 0
+              },
+              "failedInterviewCount": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "BLOCKED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "message": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["definitionId", "apiName", "label", "versionCount", "limitPercent", "versions"],
+      "properties": {
+        "definitionId": {
+          "type": "string",
+          "pattern": "^300[A-Za-z0-9]{15}$"
+        },
+        "apiName": {
+          "type": "string",
+          "minLength": 1
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "versionCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "limitPercent": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Version"
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "versionLimit": {
+            "const": 0
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "flows": {
+            "items": {
+              "properties": {
+                "limitPercent": {
+                  "type": "null"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

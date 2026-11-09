@@ -15,6 +15,7 @@
  */
 
 import inquirerInput from '@inquirer/input';
+import { ConfirmationTimeoutError } from './confirmationTimeout.js';
 
 export type ForceDeleteInputPrompt = (
   config: { message: string },
@@ -26,9 +27,9 @@ export type ForceDeleteConfirmationOptions = {
   versionNumber: number;
   flowNameMessage: string;
   versionMessage: string;
-  /** Human prompts can use stderr while the command reserves stdout for JSON. */
+  /** Interactive stream used by both typed confirmation prompts. */
   output?: NodeJS.WriteStream;
-  /** One shared deadline for both prompts. The caller may bound this by token expiry. */
+  /** One shared deadline for both typed confirmation prompts. */
   ms?: number;
 };
 
@@ -76,16 +77,16 @@ export class ForceDeleteConfirmationPrompt {
     try {
       const flowName = await this.prompt({ message: flowNameMessage }, context);
       requireInteractiveTerminal(output);
-      if (controller.signal.aborted || flowName !== flowApiName) return false;
+      if (controller.signal.aborted) throw new ConfirmationTimeoutError();
+      if (flowName !== flowApiName) return false;
       const version = await this.prompt({ message: versionMessage }, context);
       requireInteractiveTerminal(output);
-      return !controller.signal.aborted && version === String(versionNumber);
+      if (controller.signal.aborted) throw new ConfirmationTimeoutError();
+      return version === String(versionNumber);
     } catch (error) {
-      if (
-        error instanceof Error &&
-        (error.name === 'ExitPromptError' || (error.name === 'AbortPromptError' && controller.signal.aborted))
-      )
-        return false;
+      if (error instanceof Error && error.name === 'AbortPromptError' && controller.signal.aborted)
+        throw new ConfirmationTimeoutError();
+      if (error instanceof Error && error.name === 'ExitPromptError') return false;
       throw error;
     } finally {
       clearTimeout(deadline);

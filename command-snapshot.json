@@ -68,8 +68,8 @@
   {
     "alias": [],
     "command": "flow:version:delete",
-    "flagAliases": [],
-    "flagChars": ["f", "o", "y"],
+    "flagAliases": ["yes"],
+    "flagChars": ["f", "o", "p"],
     "flags": [
       "api-version",
       "dry-run",
@@ -78,9 +78,9 @@
       "force",
       "json",
       "namespace",
+      "no-prompt",
       "target-org",
-      "versions",
-      "yes"
+      "versions"
     ],
     "plugin": "@salesforce/plugin-flow"
   },
@@ -107,8 +107,8 @@
   {
     "alias": [],
     "command": "flow:version:prune",
-    "flagAliases": [],
-    "flagChars": ["f", "o", "y"],
+    "flagAliases": ["yes"],
+    "flagChars": ["f", "o", "p"],
     "flags": [
       "all",
       "api-version",
@@ -118,9 +118,9 @@
       "flow",
       "json",
       "keep-latest",
+      "no-prompt",
       "older-than",
-      "target-org",
-      "yes"
+      "target-org"
     ],
     "plugin": "@salesforce/plugin-flow"
   }

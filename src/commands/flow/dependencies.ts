@@ -35,6 +35,10 @@ export const formatDependencyReport = (report: DependencyCommandReport): string 
     `Definition: ${report.root.definitionId} | Version: ${report.root.versionId}`,
   ];
 
+  if (report.mcd.status !== 'success') {
+    lines.push('', messages.getMessage('warning.dependencyProviderIncomplete', [report.mcd.status]));
+  }
+
   for (const direction of ['incoming', 'outgoing'] as const) {
     const relationships = report.relationships.filter((edge) => edge.direction === direction);
     lines.push('', direction === 'incoming' ? '=== Incoming references' : '=== Outgoing dependencies');
@@ -77,9 +81,11 @@ export default class Dependencies extends SfCommand<DependencyCommandReport> {
     const { flags } = await this.parse(Dependencies);
     const conn = flags['target-org'].getConnection(flags['api-version']);
     const service = new DependencyService({
-      async query<T>(soql: string): Promise<{ records: T[]; totalSize: number; done: boolean }> {
-        const result = await conn.tooling.query(soql);
-        return { records: result.records as T[], totalSize: result.totalSize, done: result.done };
+      async query<T extends Record<string, unknown>>(
+        soql: string
+      ): Promise<{ records: T[]; totalSize: number; done: boolean }> {
+        const result = await conn.tooling.query<T>(soql);
+        return { records: result.records, totalSize: result.totalSize, done: result.done };
       },
     });
     const report: DependencyCommandReport = {

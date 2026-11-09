@@ -19,11 +19,14 @@ import { fileURLToPath } from 'node:url';
 import { expect } from 'chai';
 import sinon from 'sinon';
 import type inquirerConfirm from '@inquirer/confirm';
+import { ConfirmationTimeoutError } from '../../src/ux/confirmationTimeout.js';
 import { ConfirmationPrompt } from '../../src/ux/confirmation.js';
 
 type PromptFunction = typeof inquirerConfirm;
 type ChildResult = {
   confirmed: boolean;
+  timedOut: boolean;
+  exitCode: number;
   mutations: number;
   inputPaused: boolean;
 };
@@ -67,11 +70,12 @@ async function runRealPrompt(answer?: string): Promise<ChildResult> {
       clearTimeout(watchdog);
       try {
         expect(signal, stderr).to.equal(null);
-        expect(code, stderr).to.equal(0);
         expect(inputEnded, 'the parent must keep stdin open until the child exits').to.equal(false);
         const serialized = /CONFIRMATION_RESULT:(\{[^\n]+\})/.exec(output)?.[1];
         if (!serialized) throw new Error(`Missing confirmation result: ${output}`);
-        resolve(JSON.parse(serialized) as ChildResult);
+        const result = JSON.parse(serialized) as Omit<ChildResult, 'exitCode'>;
+        expect(code, stderr).to.equal(result.timedOut ? 69 : result.confirmed ? 0 : 1);
+        resolve({ ...result, exitCode: code! });
       } catch (error) {
         reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -118,14 +122,30 @@ describe('ConfirmationPrompt', () => {
           context?.signal?.addEventListener('abort', () => reject(expected));
         })
     );
-    const confirmation = new ConfirmationPrompt(prompt).confirm({ message: 'Delete?' });
+    const confirmation = new ConfirmationPrompt(prompt)
+      .confirm({ message: 'Delete?' })
+      .catch((error: unknown) => error);
     const signal = prompt.firstCall.args[1]?.signal;
 
     await clock.tickAsync(59_999);
     expect(signal?.aborted).to.equal(false);
     await clock.tickAsync(1);
-    expect(await confirmation).to.equal(false);
+    expect(await confirmation).to.be.instanceOf(ConfirmationTimeoutError);
     expect(signal?.aborted).to.equal(true);
+    expect(clock.countTimers()).to.equal(0);
+  });
+
+  it('rejects a late yes from a prompt that ignores its abort signal', async () => {
+    const clock = sandbox.useFakeTimers();
+    prompt.callsFake(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 51));
+      return true;
+    });
+    const confirmation = new ConfirmationPrompt(prompt)
+      .confirm({ message: 'Delete?', ms: 50 })
+      .catch((error: unknown) => error);
+    await clock.tickAsync(51);
+    expect(await confirmation).to.be.instanceOf(ConfirmationTimeoutError);
     expect(clock.countTimers()).to.equal(0);
   });
 
@@ -181,22 +201,52 @@ describe('ConfirmationPrompt', () => {
   });
 
   it('cleans up a real timed-out prompt and exits naturally with stdin still open', async () => {
-    expect(await runRealPrompt()).to.deep.equal({ confirmed: false, mutations: 0, inputPaused: true });
+    expect(await runRealPrompt()).to.deep.equal({
+      confirmed: false,
+      timedOut: true,
+      exitCode: 69,
+      mutations: 0,
+      inputPaused: true,
+    });
   });
 
   it('accepts yes through the real prompt and exits naturally', async () => {
-    expect(await runRealPrompt('y\n')).to.deep.equal({ confirmed: true, mutations: 1, inputPaused: true });
+    expect(await runRealPrompt('y\n')).to.deep.equal({
+      confirmed: true,
+      timedOut: false,
+      exitCode: 0,
+      mutations: 1,
+      inputPaused: true,
+    });
   });
 
   it('accepts no through the real prompt without a mutation', async () => {
-    expect(await runRealPrompt('n\n')).to.deep.equal({ confirmed: false, mutations: 0, inputPaused: true });
+    expect(await runRealPrompt('n\n')).to.deep.equal({
+      confirmed: false,
+      timedOut: false,
+      exitCode: 1,
+      mutations: 0,
+      inputPaused: true,
+    });
   });
 
   it('defaults to no on Enter through the real prompt', async () => {
-    expect(await runRealPrompt('\n')).to.deep.equal({ confirmed: false, mutations: 0, inputPaused: true });
+    expect(await runRealPrompt('\n')).to.deep.equal({
+      confirmed: false,
+      timedOut: false,
+      exitCode: 1,
+      mutations: 0,
+      inputPaused: true,
+    });
   });
 
   it('handles Ctrl-C through the real prompt without a mutation', async () => {
-    expect(await runRealPrompt('\u0003')).to.deep.equal({ confirmed: false, mutations: 0, inputPaused: true });
+    expect(await runRealPrompt('\u0003')).to.deep.equal({
+      confirmed: false,
+      timedOut: false,
+      exitCode: 1,
+      mutations: 0,
+      inputPaused: true,
+    });
   });
 });
