@@ -29,6 +29,7 @@ import {
   classNamesFlag,
   suiteNamesFlag,
   testsFlag,
+  waitFlag,
 } from '../../../flags.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
@@ -53,6 +54,7 @@ export default class FlowRunTest extends SfCommand<FlowRunTestResult> {
     'class-names': classNamesFlag,
     'suite-names': suiteNamesFlag,
     tests: testsFlag,
+    wait: waitFlag,
   };
   protected cancellationTokenSource = new CancellationTokenSource();
 

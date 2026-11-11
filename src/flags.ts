@@ -110,3 +110,10 @@ export const detailedCoverageSummaryFlag = Flags.boolean({
   summary: messages.getMessage('flags.detailed-coverage.summary'),
   dependsOn: ['code-coverage'],
 });
+
+export const waitFlag = Flags.duration({
+  unit: 'minutes',
+  char: 'w',
+  summary: messages.getMessage('flags.wait.summary'),
+  min: 0,
+});
