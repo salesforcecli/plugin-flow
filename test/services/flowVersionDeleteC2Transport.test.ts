@@ -101,7 +101,10 @@ describe('C2 Core bulk deletion through the installed authenticated Connection',
     expect(native.url).to.equal(
       'https://flow-c2-unit-test.invalid/services/data/v67.0/connect/interaction/flow-versions/delete'
     );
-    expect(JSON.parse(native.body!)).to.deep.equal({ contractVersion: '1', targets });
+    expect(JSON.parse(native.body!)).to.deep.equal({
+      contractVersion: '1',
+      targets: targets.map((target) => ({ versionId: target.versionId })),
+    });
     expect(native.headers?.Authorization).to.equal('Bearer unit-test-only-not-a-credential');
     expect(Object.entries(native.headers ?? {}).find(([key]) => key.toLowerCase() === 'content-type')?.[1]).to.equal(
       'application/json'

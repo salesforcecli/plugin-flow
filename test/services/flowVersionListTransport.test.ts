@@ -34,7 +34,7 @@ const row = (number = 1, changes: Record<string, unknown> = {}): Record<string, 
   ageDays: 26,
   createdById: creatorId.slice(0, 15),
   createdByName: 'Flow Author',
-  referenceCount: 0,
+  referenceCount: null,
   pausedInterviewCount: 0,
   failedInterviewCount: 0,
   deletable: true,
@@ -213,7 +213,7 @@ describe('C1 Core list through the installed authenticated Connection', () => {
             deletable: false,
             reasonCode: 'INTERVIEWS',
             message: 'INTERVIEWS (99)',
-            referenceCount: 5,
+            referenceCount: null,
             pausedInterviewCount: 2,
             failedInterviewCount: 3,
           }),
@@ -222,7 +222,7 @@ describe('C1 Core list through the installed authenticated Connection', () => {
     ]);
     const report = await client.list({ all: true });
     expect(report.flows[0].versions[0]).to.include({
-      referenceCount: 5,
+      referenceCount: null,
       pausedInterviewCount: 2,
       failedInterviewCount: 3,
       reasonCode: 'INTERVIEWS',

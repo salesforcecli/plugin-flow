@@ -176,8 +176,7 @@
           "description": "Stored UTC status-change timestamp; null means no stored value. Omitted by older Core builds."
         },
         "referenceCount": {
-          "type": ["integer", "null"],
-          "minimum": 0
+          "type": "null"
         },
         "pausedInterviewCount": {
           "type": ["integer", "null"],
@@ -198,6 +197,19 @@
         },
         "message": {
           "type": ["string", "null"]
+        },
+        "runInMode": {
+          "type": ["string", "null"],
+          "description": "Setup version-view fields are omitted by older servers; nullable values remain unknown."
+        },
+        "apiVersion": {
+          "type": ["string", "null"]
+        },
+        "capacityCategory": {
+          "type": ["string", "null"]
+        },
+        "areMetricsLoggedToDataCloud": {
+          "type": ["boolean", "null"]
         }
       },
       "allOf": [
@@ -250,8 +262,7 @@
           "then": {
             "properties": {
               "referenceCount": {
-                "type": "integer",
-                "minimum": 0
+                "type": "null"
               },
               "pausedInterviewCount": {
                 "type": "integer",

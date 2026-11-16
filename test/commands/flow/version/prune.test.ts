@@ -60,7 +60,7 @@ const fixture = (): RetentionPlan => ({
           createdByName: null,
           lastModifiedDate: null,
           statusChangeDate: null,
-          referenceCount: 0,
+          referenceCount: null,
           pausedInterviewCount: 0,
           failedInterviewCount: 0,
           deletable: true,

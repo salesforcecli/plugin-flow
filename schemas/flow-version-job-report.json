@@ -1,0 +1,88 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowVersionJobReport",
+  "definitions": {
+    "FlowVersionJobReport": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "jobId": {
+          "type": "string"
+        },
+        "jobStatus": {
+          "$ref": "#/definitions/FlowVersionPruneJobStatus"
+        },
+        "status": {
+          "$ref": "#/definitions/FlowVersionPruneJobStatus",
+          "description": "Compatibility alias for the original status-only report."
+        },
+        "error": {
+          "type": ["string", "null"]
+        },
+        "targetOrg": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionJobVersionResult"
+          }
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "apiVersion",
+        "error",
+        "jobId",
+        "jobStatus",
+        "notes",
+        "status",
+        "targetOrg",
+        "truncated",
+        "versions",
+        "warnings"
+      ]
+    },
+    "FlowVersionPruneJobStatus": {
+      "type": "string",
+      "enum": ["Scheduled", "Running", "Complete", "Error"]
+    },
+    "FlowVersionJobVersionResult": {
+      "type": "object",
+      "properties": {
+        "flowApiName": {
+          "type": ["string", "null"]
+        },
+        "versionId": {
+          "type": "string"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["DELETED", "BLOCKED", "FAILED", "NOT ASSESSED"]
+        },
+        "reason": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["flowApiName", "versionId", "outcome", "reason"],
+      "additionalProperties": false
+    }
+  }
+}

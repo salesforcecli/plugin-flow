@@ -66,7 +66,7 @@ const reportFixture = (): ConnectFlowVersionListReport => ({
           createdById: '005000000000001AAA',
           createdByName: 'Flow Author',
           lastModifiedDate: '2026-10-02T12:00:00.000Z',
-          referenceCount: 0,
+          referenceCount: null,
           pausedInterviewCount: 0,
           failedInterviewCount: 0,
           deletable: true,
@@ -92,7 +92,7 @@ const blocked = (
     deletable: false,
     reasonCode: 'PAUSED_INTERVIEWS',
     message,
-    referenceCount: 2,
+    referenceCount: null,
     pausedInterviewCount: 2,
     failedInterviewCount: 1,
   });
@@ -220,7 +220,7 @@ describe('flow version list command', () => {
     const result = await FlowVersionList.run([...args, '--json']);
     expect(result).to.deep.equal(commandReportFixture(report));
     expect(result.contractVersion).to.equal('1');
-    expect(result.flows[0].versions[0].referenceCount).to.equal(0);
+    expect(result.flows[0].versions[0].referenceCount).to.equal(null);
     for (const field of ['rows', 'assessmentErrors', 'countErrors', 'capacityErrors'])
       expect(result).not.to.have.property(field);
     expect(log.called).to.equal(false);
@@ -358,7 +358,7 @@ describe('flow version list command', () => {
     native = true;
     request.resolves(wirePage());
     const result = await FlowVersionList.run([...args, '--api-version', '67.0', '--json']);
-    expect(result.flows[0].versions[0].referenceCount).to.equal(0);
+    expect(result.flows[0].versions[0].referenceCount).to.equal(null);
     expect(request.calledOnce).to.equal(true);
     const [req, opts] = request.firstCall.args as [{ method: string; url: string; body: string }, unknown];
     const body = JSON.parse(req.body) as Record<string, unknown>;
@@ -428,7 +428,7 @@ describe('formatVersionListReport', () => {
       'Created By Flow Author',
       'Created Date 2026-10-01T12:00:00.000Z',
       'Last Modified Date 2026-10-02T12:00:00.000Z',
-      'Referenced By 0',
+      'Referenced By Unavailable',
       'Paused Interviews 0',
       'Failed Interviews 0',
       'Deletable Yes',
@@ -450,7 +450,7 @@ describe('formatVersionListReport', () => {
     const output = formatVersionListReport(report, 100);
     expect(tableText(output)).to.include('Deletable No');
     expect(textWithoutLayout(output)).to.include(message.replace(/\s/gu, ''));
-    for (const value of ['Referenced By 2', 'Paused Interviews 2', 'Failed Interviews 1'])
+    for (const value of ['Referenced By Unavailable', 'Paused Interviews 2', 'Failed Interviews 1'])
       expect(tableText(output)).to.include(value);
     expect(output).not.to.include('Blocker details');
   });
@@ -464,7 +464,7 @@ describe('formatVersionListReport', () => {
     const report = commandReportFixture();
     Object.assign(report.flows[0].versions[0], {
       status: 'Active',
-      referenceCount: 4,
+      referenceCount: null,
       pausedInterviewCount: 9,
       failedInterviewCount: 3,
     });
@@ -642,6 +642,18 @@ describe('Flow version list JSON contract', () => {
     expect(report.contractVersion).to.equal('1');
     expect(report.flows[0].versions[0]).not.to.have.property('assessment');
   });
+  it('accepts optional Setup version-view metadata returned by the merged SDK', () => {
+    const report = commandReportFixture();
+    Object.assign(report.flows[0].versions[0], {
+      runInMode: 'DefaultMode',
+      apiVersion: '69',
+      capacityCategory: null,
+      areMetricsLoggedToDataCloud: false,
+    });
+    expectValidReport(report);
+    Object.assign(report.flows[0].versions[0], { areMetricsLoggedToDataCloud: 'false' });
+    expect(validate(report)).to.equal(false);
+  });
   it('validates BLOCKED and ERROR without duplicated error collections', () => {
     const report = commandReportFixture();
     blocked(report);
@@ -680,12 +692,17 @@ describe('Flow version list JSON contract', () => {
     report.flows[0].versions[0].deletable = true;
     expect(validate(report)).to.equal(false);
   });
-  it('rejects missing, negative or null success counts', () => {
+  it('requires null references and nonnegative available interview counts', () => {
     const report = commandReportFixture();
-    report.flows[0].versions[0].referenceCount = -1;
+    Object.assign(report.flows[0].versions[0], { referenceCount: -1 });
     expect(validate(report)).to.equal(false);
     report.flows[0].versions[0].referenceCount = null;
+    expect(validate(report)).to.equal(true);
+    report.flows[0].versions[0].pausedInterviewCount = -1;
     expect(validate(report)).to.equal(false);
+    report.flows[0].versions[0].pausedInterviewCount = null;
+    expect(validate(report)).to.equal(false);
+    report.flows[0].versions[0].pausedInterviewCount = 0;
     delete (report.flows[0].versions[0] as unknown as Record<string, unknown>).failedInterviewCount;
     expect(validate(report)).to.equal(false);
   });

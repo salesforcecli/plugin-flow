@@ -83,6 +83,7 @@ $ yarn test
 - [`sf flow get test`](#sf-flow-get-test)
 - [`sf flow run test`](#sf-flow-run-test)
 - [`sf flow version delete`](#sf-flow-version-delete)
+- [`sf flow version job report`](#sf-flow-version-job-report)
 - [`sf flow version list`](#sf-flow-version-list)
 - [`sf flow version prune`](#sf-flow-version-prune)
 
@@ -410,6 +411,60 @@ EXAMPLES
 ```
 
 _See code: [src/commands/flow/version/delete.ts](https://github.com/salesforcecli/plugin-flow/blob/v2.0.2/src/commands/flow/version/delete.ts)_
+
+## `sf flow version job report`
+
+Report the status and per-version results of an existing Flow version job.
+
+```
+USAGE
+  $ sf flow version job report -o <value> --job-id <value> [--json] [--flags-dir <value>] [--api-version <value>]
+
+FLAGS
+  -o, --target-org=<value>   (required) Username or alias of the target org. Not required if the `target-org`
+                             configuration variable is already set.
+      --api-version=<value>  Override the api version used for api requests made by this command
+      --job-id=<value>       (required) Job ID returned by an async Flow version operation.
+
+GLOBAL FLAGS
+  --flags-dir=<value>  Import flag values from a directory.
+  --json               Format output as json.
+
+DESCRIPTION
+  Report the status and per-version results of an existing Flow version job.
+
+  Use the job ID printed when an async Flow version job is queued. Read /xds/operation/{jobId} using the authenticated
+  org and API 67.0 or later. For a finished job, also read the BackgroundOperation Status, Result and Error fields when
+  the status response omits or masks the details. This command does not poll, submit, cancel or resume jobs, or delete
+  versions.
+
+  Display the job ID and its actual status: Scheduled, Running, Complete or Error. Scheduled and Running return an empty
+  versions array; run this command again later for a new snapshot. Closing the CLI does not cancel the server job.
+
+  For Complete and Error jobs, display each stored version outcome (DELETED, BLOCKED, FAILED or NOT ASSESSED) and its
+  reason. A Complete job can include versions that weren't deleted. When the job is Error, display its stored error text
+  as well. Report selection limits and truncated results as warnings; missing results never imply successful deletion.
+
+  Exit 0 for a successful report showing Scheduled, Running or Complete. Exit 1 when the job reports Error, a required
+  read fails, or a response cannot be validated. Missing or invalid command arguments exit 2. A 404 can mean that the ID
+  is missing, invalid or inaccessible; it is not evidence that a job completed or was cancelled.
+
+  Use --json for automation. The result includes jobId, jobStatus, error, truncated and versions, plus warnings, notes,
+  targetOrg and apiVersion. Each version has flowApiName, versionId, outcome and reason. Missing Flow names and reasons
+  are null. The status field remains an alias of jobStatus for compatibility. The standard JSON envelope status is the
+  command exit code.
+
+EXAMPLES
+  Check a job using the ID returned by async prune:
+
+    $ sf flow version job report --target-org my-org --api-version 69.0 --job-id 08P000000000001
+
+  Return the current status and stored version results as JSON:
+
+    $ sf flow version job report --target-org my-org --api-version 69.0 --job-id 08P000000000001 --json
+```
+
+_See code: [src/commands/flow/version/job/report.ts](https://github.com/salesforcecli/plugin-flow/blob/v2.0.2/src/commands/flow/version/job/report.ts)_
 
 ## `sf flow version list`
 

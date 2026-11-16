@@ -8,7 +8,7 @@
     "@oclif/core": "^5.0.0",
     "@salesforce/apex-node": "^9.0.7",
     "@salesforce/core": "^9.1.9",
-    "@salesforce/flow-node": "git+https://github.com/forcedotcom/flows.git#fef552379bb1191dfd307a6385c00abe59055076",
+    "@salesforce/flow-node": "git+https://github.com/forcedotcom/flows.git#bc144a134ed3b988b07e0e523299a4ec9270f8da",
     "@salesforce/kit": "^4.0.0",
     "@salesforce/sf-plugins-core": "^13.0.4",
     "ansis": "^3.17.0"

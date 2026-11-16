@@ -290,6 +290,14 @@ describe('C6 force deletion through the installed authenticated Connection', () 
       namespace: null,
       versions: [
         { definitionId, versionId, flowName: 'Unit_Flow', namespace: null, versionNumber: 1, status: 'Draft' },
+        {
+          definitionId,
+          versionId: '301000000000002AAA',
+          flowName: 'Unit_Flow',
+          namespace: null,
+          versionNumber: 2,
+          status: 'Draft',
+        },
       ],
     });
     return { service: new FlowVersionForceDeleteService(f.adapter), request: f.request };

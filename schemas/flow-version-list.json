@@ -168,8 +168,22 @@
           "type": ["string", "null"],
           "description": "Omitted by older servers; null means Core has no stored status-change time."
         },
+        "runInMode": {
+          "type": ["string", "null"],
+          "description": "Setup version-view fields are omitted by older servers; nullable values remain unknown."
+        },
+        "apiVersion": {
+          "type": ["string", "null"]
+        },
+        "capacityCategory": {
+          "type": ["string", "null"]
+        },
+        "areMetricsLoggedToDataCloud": {
+          "type": ["boolean", "null"]
+        },
         "referenceCount": {
-          "type": ["number", "null"]
+          "type": "null",
+          "description": "The list endpoint does not count referencers."
         },
         "pausedInterviewCount": {
           "type": ["number", "null"]

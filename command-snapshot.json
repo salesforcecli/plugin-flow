@@ -86,6 +86,14 @@
   },
   {
     "alias": [],
+    "command": "flow:version:job:report",
+    "flagAliases": [],
+    "flagChars": ["o"],
+    "flags": ["api-version", "flags-dir", "job-id", "json", "target-org"],
+    "plugin": "@salesforce/plugin-flow"
+  },
+  {
+    "alias": [],
     "command": "flow:version:list",
     "flagAliases": [],
     "flagChars": ["f", "o"],

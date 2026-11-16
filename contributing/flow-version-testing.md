@@ -22,6 +22,8 @@ The suite checks one-Flow and org-wide listing, repeated version selection, expl
 
 No approval flag appears in the live suite. Force cases use `--dry-run` and verify invalid usage before force processing. Actual deletion, interview abandonment, permission enforcement, audit, concurrent mutations and rollback require separately approved disposable fixtures and mutation integration tests; this read-only suite does not certify them.
 
+The job-report NUT is separately opt-in through `FLOW_VERSION_JOB_NUT_ID`, together with `FLOW_VERSION_JOB_NUT_TARGET_ORG` and optional `FLOW_VERSION_JOB_NUT_API_VERSION` (default 67.0). Supply an existing accessible job ID. These independent variables do not activate the Flow fixture suite. This case launches one read-only `flow version job report --json` command; finished jobs also read the BackgroundOperation Status, Result and Error fields. It validates the parsed per-version results and status without creating a job or requiring Flow/version fixture settings. Without a job ID the case is pending, even when the Flow fixture suite is configured. A failed or inaccessible lookup is a test failure, not a successful status result.
+
 For local unit, type and lint checks:
 
 ```sh

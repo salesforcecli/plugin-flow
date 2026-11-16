@@ -53,7 +53,7 @@ const row = (n: number, extra: Partial<ConnectFlowVersionListVersion> = {}): Con
   createdByName: null,
   lastModifiedDate: '2026-10-20T00:00:00Z',
   statusChangeDate: null,
-  referenceCount: 0,
+  referenceCount: null,
   pausedInterviewCount: 0,
   failedInterviewCount: 0,
   deletable: true,
