@@ -1,0 +1,390 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowVersionDeleteCommandResult",
+  "definitions": {
+    "FlowVersionDeleteCommandResult": {
+      "$ref": "#/definitions/FlowVersionMutationReport"
+    },
+    "FlowVersionMutationReport": {
+      "type": "object",
+      "properties": {
+        "contractVersion": {
+          "type": "string",
+          "const": "3"
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["NORMAL", "FORCE", "RETENTION"]
+        },
+        "targetOrg": {
+          "type": "string"
+        },
+        "apiVersion": {
+          "type": "string"
+        },
+        "flow": {
+          "type": ["string", "null"]
+        },
+        "dryRun": {
+          "type": "boolean"
+        },
+        "confirmed": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["previewed", "succeeded", "partial", "blocked", "failed", "unknown", "cancelled", "timed_out"]
+        },
+        "results": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VersionActionResult"
+          }
+        },
+        "summary": {
+          "$ref": "#/definitions/FlowVersionMutationSummary"
+        },
+        "rule": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "keepLatest": {
+                  "type": "number"
+                },
+                "olderThan": {
+                  "type": "string"
+                }
+              },
+              "required": ["keepLatest", "olderThan"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "impact": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/FlowVersionForceDeleteImpact"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "execution": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "operationId": {
+                  "type": ["string", "null"]
+                },
+                "interviewIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "scheduledWorkIds": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                },
+                "errors": {
+                  "type": "array",
+                  "items": {}
+                }
+              },
+              "required": ["operationId", "interviewIds", "scheduledWorkIds", "errors"],
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Acknowledged force-execution metadata, without prepared plans or continuation history."
+        },
+        "warnings": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "contractVersion",
+        "mode",
+        "targetOrg",
+        "apiVersion",
+        "flow",
+        "dryRun",
+        "confirmed",
+        "outcome",
+        "results",
+        "summary",
+        "rule",
+        "impact",
+        "execution",
+        "warnings"
+      ],
+      "additionalProperties": false
+    },
+    "VersionActionResult": {
+      "type": "object",
+      "properties": {
+        "flow": {
+          "type": "string"
+        },
+        "definitionId": {
+          "type": ["string", "null"]
+        },
+        "versionId": {
+          "type": ["string", "null"]
+        },
+        "versionNumber": {
+          "type": "number"
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "action": {
+          "type": "string",
+          "enum": ["delete", "keep", "blocked", "error"]
+        },
+        "outcome": {
+          "type": ["string", "null"],
+          "enum": ["succeeded", "blocked", "failed", "unknown", "not_attempted", null]
+        },
+        "reasonCode": {
+          "type": ["string", "null"],
+          "description": "Actual acknowledgement/assessment details, including successful ALREADY_DELETED."
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "blockingReasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/VersionActionReason"
+          }
+        },
+        "error": {
+          "anyOf": [
+            {
+              "$ref": "#/definitions/VersionActionError"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "keepReason": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "code": {
+                "type": "string"
+              },
+              "message": {
+                "type": "string"
+              }
+            },
+            "required": ["code", "message"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "flow",
+        "definitionId",
+        "versionId",
+        "versionNumber",
+        "status",
+        "action",
+        "outcome",
+        "reasonCode",
+        "message",
+        "blockingReasons",
+        "error",
+        "keepReason"
+      ],
+      "additionalProperties": false
+    },
+    "VersionActionReason": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "count": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["code", "message", "count"],
+      "additionalProperties": false
+    },
+    "VersionActionError": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      },
+      "required": ["code", "message"],
+      "additionalProperties": false
+    },
+    "FlowVersionMutationSummary": {
+      "type": "object",
+      "properties": {
+        "succeeded": {
+          "type": "number"
+        },
+        "blocked": {
+          "type": "number"
+        },
+        "failed": {
+          "type": "number"
+        },
+        "unknown": {
+          "type": "number"
+        },
+        "notAttempted": {
+          "type": "number"
+        },
+        "kept": {
+          "type": "number"
+        },
+        "wouldDelete": {
+          "type": "number"
+        }
+      },
+      "required": ["succeeded", "blocked", "failed", "unknown", "notAttempted", "kept", "wouldDelete"],
+      "additionalProperties": false
+    },
+    "FlowVersionForceDeleteImpact": {
+      "type": "object",
+      "properties": {
+        "versionId": {
+          "type": "string"
+        },
+        "flowApiName": {
+          "type": ["string", "null"]
+        },
+        "versionNumber": {
+          "type": ["number", "null"]
+        },
+        "versionStatus": {
+          "type": ["string", "null"]
+        },
+        "deletable": {
+          "type": "boolean"
+        },
+        "evaluationComplete": {
+          "type": "boolean"
+        },
+        "reasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionForceDeleteReason"
+          }
+        },
+        "interviews": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionForceDeleteInterview"
+          }
+        },
+        "interviewsTruncated": {
+          "type": "boolean"
+        },
+        "interviewCountLowerBound": {
+          "type": "number"
+        },
+        "coverage": {
+          "type": "string"
+        },
+        "eligibilityIsAdvisory": {
+          "type": "boolean",
+          "const": true
+        }
+      },
+      "required": [
+        "versionId",
+        "flowApiName",
+        "versionNumber",
+        "versionStatus",
+        "deletable",
+        "evaluationComplete",
+        "reasons",
+        "interviews",
+        "interviewsTruncated",
+        "interviewCountLowerBound",
+        "coverage",
+        "eligibilityIsAdvisory"
+      ],
+      "additionalProperties": false,
+      "description": "A read-only advisory preview, including the records and reasons actually reported by Core."
+    },
+    "FlowVersionForceDeleteReason": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "count": {
+          "type": ["number", "null"]
+        },
+        "relatedResources": {
+          "anyOf": [
+            {
+              "type": "array",
+              "items": {}
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["code"],
+      "additionalProperties": false,
+      "description": "Optional reason details are preserved as sent; no counts or resource rows are inferred."
+    },
+    "FlowVersionForceDeleteInterview": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "label": {
+          "type": ["string", "null"]
+        },
+        "createdDate": {
+          "type": ["string", "null"]
+        },
+        "ownerId": {
+          "type": ["string", "null"]
+        }
+      },
+      "required": ["id", "status", "label", "createdDate", "ownerId"],
+      "additionalProperties": false
+    }
+  }
+}

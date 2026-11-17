@@ -1,0 +1,261 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "FlowVersionListCommandResult",
+  "description": "C1 API-named version fields. Org summaries omit versions. Outcome distinguishes assessment errors; unavailable counts remain null.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flows"],
+  "properties": {
+    "flows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Flow"
+      }
+    }
+  },
+  "definitions": {
+    "Reason": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["code"],
+      "properties": {
+        "code": {
+          "type": "string",
+          "minLength": 1
+        },
+        "message": {
+          "type": "string"
+        },
+        "count": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        }
+      }
+    },
+    "Version": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "versionNumber",
+        "status",
+        "versionName",
+        "createdDate",
+        "lastModifiedDate",
+        "createdByName",
+        "ageDays",
+        "runInMode",
+        "apiVersion",
+        "capacityCategory",
+        "areMetricsLoggedToDataCloud",
+        "pausedInterviewCount",
+        "failedInterviewCount",
+        "autosavedInterviewCount",
+        "savedInterviewCount",
+        "deletable",
+        "outcome",
+        "reasonCode",
+        "message",
+        "blockingReasons"
+      ],
+      "properties": {
+        "versionNumber": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "createdDate": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"],
+          "format": "date-time"
+        },
+        "deletable": {
+          "type": "boolean"
+        },
+        "blockingReasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Reason"
+          }
+        },
+        "error": {
+          "type": "string",
+          "minLength": 1
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
+        "createdByName": {
+          "type": ["string", "null"]
+        },
+        "runInMode": {
+          "type": ["string", "null"]
+        },
+        "apiVersion": {
+          "type": ["string", "null"]
+        },
+        "capacityCategory": {
+          "type": ["string", "null"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "areMetricsLoggedToDataCloud": {
+          "type": ["boolean", "null"]
+        },
+        "ageDays": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "pausedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "failedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "autosavedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "savedInterviewCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "PASS"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "deletable": {
+                "const": true
+              },
+              "reasonCode": {
+                "type": "null"
+              },
+              "message": {
+                "type": "null"
+              },
+              "blockingReasons": {
+                "maxItems": 0
+              }
+            },
+            "not": {
+              "required": ["error"]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "BLOCKED"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "deletable": {
+                "const": false
+              },
+              "reasonCode": {
+                "type": "string",
+                "minLength": 1
+              },
+              "blockingReasons": {
+                "minItems": 1
+              }
+            },
+            "not": {
+              "required": ["error"]
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "outcome": {
+                "const": "ERROR"
+              }
+            }
+          },
+          "then": {
+            "required": ["error"],
+            "properties": {
+              "deletable": {
+                "const": false
+              },
+              "reasonCode": {
+                "type": "string",
+                "minLength": 1
+              },
+              "blockingReasons": {
+                "maxItems": 0
+              },
+              "pausedInterviewCount": {
+                "type": "null"
+              },
+              "failedInterviewCount": {
+                "type": "null"
+              },
+              "autosavedInterviewCount": {
+                "type": "null"
+              },
+              "savedInterviewCount": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "Flow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["flow", "versionCount", "versionLimit", "deletableCount"],
+      "properties": {
+        "flow": {
+          "type": "string",
+          "minLength": 1
+        },
+        "versionCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "versionLimit": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "deletableCount": {
+          "type": ["integer", "null"],
+          "minimum": 0
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/Version"
+          }
+        }
+      }
+    }
+  }
+}

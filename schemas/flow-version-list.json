@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$ref": "#/definitions/FlowVersionListCommandResult",
+  "definitions": {
+    "FlowVersionListCommandResult": {
+      "type": "object",
+      "properties": {
+        "flows": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionListResultFlow"
+          }
+        }
+      },
+      "required": ["flows"],
+      "additionalProperties": false
+    },
+    "FlowVersionListResultFlow": {
+      "type": "object",
+      "properties": {
+        "flow": {
+          "type": "string"
+        },
+        "versionCount": {
+          "type": ["number", "null"]
+        },
+        "versionLimit": {
+          "type": "number"
+        },
+        "deletableCount": {
+          "type": ["number", "null"],
+          "description": "Unavailable if the catalog or any version's eligibility could not be assessed."
+        },
+        "versions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/FlowVersionListResultVersion"
+          }
+        }
+      },
+      "required": ["flow", "versionCount", "versionLimit", "deletableCount"],
+      "additionalProperties": false
+    },
+    "FlowVersionListResultVersion": {
+      "type": "object",
+      "properties": {
+        "versionNumber": {
+          "type": "number"
+        },
+        "status": {
+          "type": ["string", "null"]
+        },
+        "versionName": {
+          "type": ["string", "null"]
+        },
+        "createdDate": {
+          "type": ["string", "null"]
+        },
+        "lastModifiedDate": {
+          "type": ["string", "null"]
+        },
+        "createdByName": {
+          "type": ["string", "null"]
+        },
+        "ageDays": {
+          "type": ["number", "null"]
+        },
+        "runInMode": {
+          "type": ["string", "null"]
+        },
+        "apiVersion": {
+          "type": ["string", "null"]
+        },
+        "capacityCategory": {
+          "type": ["string", "null"]
+        },
+        "areMetricsLoggedToDataCloud": {
+          "type": ["boolean", "null"]
+        },
+        "pausedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "failedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "autosavedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "savedInterviewCount": {
+          "type": ["number", "null"]
+        },
+        "deletable": {
+          "type": "boolean"
+        },
+        "outcome": {
+          "type": "string",
+          "enum": ["PASS", "BLOCKED", "ERROR"]
+        },
+        "reasonCode": {
+          "type": ["string", "null"]
+        },
+        "message": {
+          "type": ["string", "null"]
+        },
+        "blockingReasons": {
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/PublicBlockingReason"
+          }
+        },
+        "error": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "versionNumber",
+        "status",
+        "versionName",
+        "createdDate",
+        "lastModifiedDate",
+        "createdByName",
+        "ageDays",
+        "runInMode",
+        "apiVersion",
+        "capacityCategory",
+        "areMetricsLoggedToDataCloud",
+        "pausedInterviewCount",
+        "failedInterviewCount",
+        "autosavedInterviewCount",
+        "savedInterviewCount",
+        "deletable",
+        "outcome",
+        "reasonCode",
+        "message",
+        "blockingReasons"
+      ],
+      "additionalProperties": false,
+      "description": "API version facts retained under their original names for console and JSON output."
+    },
+    "PublicBlockingReason": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        },
+        "count": {
+          "type": ["number", "null"]
+        }
+      },
+      "required": ["code"],
+      "additionalProperties": false
+    }
+  }
+}
