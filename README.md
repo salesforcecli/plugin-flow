@@ -468,90 +468,69 @@ _See code: [src/commands/flow/version/job/report.ts](https://github.com/salesfor
 
 ## `sf flow version list`
 
-List Flow versions, reference and interview counts, and deletion eligibility.
+List Flow versions and show whether each can be deleted.
 
 ```
 USAGE
-  $ sf flow version list -o <value> [--json] [--flags-dir <value>] [--api-version <value>] [-f <value> | --all]
-    [--namespace <value>] [--status <value>] [--older-than <value>] [--min-percent <value>] [--deletable]
+  $ sf flow version list -o <value> [--json] [--flags-dir <value>] [--api-version <value>] [-f <value> | ]
+    [--older-than <value>] [--deletable]
 
 FLAGS
-  -f, --flow=<value>         Exact Flow API name, qualified with its namespace when applicable; mutually exclusive with
-                             --all.
+  -f, --flow=<value>         Flow API name. Omit it to show a summary of every Flow in the org.
   -o, --target-org=<value>   (required) Username or alias of the target org. Not required if the `target-org`
                              configuration variable is already set.
-      --all                  List versions for all Flows in the org; mutually exclusive with --flow.
       --api-version=<value>  Override the api version used for api requests made by this command
-      --deletable            Show backend PASS versions; the server retains assessment errors.
-      --min-percent=<value>  Show Flows at or above this percentage of their configured version limit (0-100).
-      --namespace=<value>    Unsupported by the Core list API; use --flow with the qualified API name instead.
-      --older-than=<value>   Show versions at least this many whole days old since CreatedDate, from 0d to 36500d.
-      --status=<value>       Filter by active, inactive (all non-Active), draft, obsolete, invaliddraft or underreview;
-                             case-insensitive.
+      --deletable            Show only versions that can be deleted. Requires --flow.
+      --older-than=<value>   Show versions last modified more than this long ago, such as 90d. Requires --flow.
 
 GLOBAL FLAGS
   --flags-dir=<value>  Import flag values from a directory.
   --json               Format output as json.
 
 DESCRIPTION
-  List Flow versions, reference and interview counts, and deletion eligibility.
+  List Flow versions and show whether each can be deleted.
 
-  Read Flow versions through the authenticated Core Connect list API. Choose exactly one scope: --flow for an exact Flow
-  API name, including its namespace prefix when applicable, or --all for every Flow in the org. No Flow name, org, count
-  or version limit is hardcoded. The Core list contract has no separate namespace filter; --namespace is rejected. Use a
-  qualified --flow name instead.
+  List flow versions.
 
-  The console includes the A3/C1 fields: Flow version name, version number, status, age, creator, creation date,
-  last-modified date, reference count, paused and failed interview counts, and whether the version is deletable, with
-  the full server reason when it is not. Standard Salesforce CLI tables wrap complete values. Normal-width consoles use
-  Field/Value tables. JSON preserves raw IDs and server values.
+  By default, show a summary of every Flow in the org, ordered by version count. Each summary row contains the Flow API
+  name, version count, and deletable count. Use --flow to list versions of one Flow, with the latest version first.
 
-  API 67.0 or later and POST /connect/interaction/flow-versions/list are required. HTTP 201 is success even when
-  versions are BLOCKED or ERROR. The SDK follows every nextOffset, including empty pages. This command does not query
-  Tooling inventory or the separate deletion-assessment API.
+  For each version, show Version, Status, Flow Version Name, Created, Last Modified, Created By, Age, Run in Mode, API
+  Version, Capacity Category, Log Metrics to Data Cloud, Paused, Failed, Autosaved, Saved Interviews, Deletable and
+  Reason. The one-Flow table keeps all columns; long text wraps within its column. Age is Core's returned ageDays value,
+  and the Flow header keeps its full version count and limit.
 
-  Native status filters are case-insensitive: active, draft, obsolete, invaliddraft and underreview. Inactive is a
-  compatibility alias: the SDK retrieves list pages without a server status filter, then displays non-Active rows. ERROR
-  rows with unavailable status remain visible. --older-than accepts whole days from CreatedDate, from 0d to 36500d.
-  --deletable requests PASS rows; the server also retains ERROR rows. --min-percent uses the Flow's complete version
-  count before filtering and actual org version limit. The CLI preserves the server's integer percentage. A zero limit
-  and null percentage remain explicit; its product filtering rule is still open.
+  Read each count directly from the list API. Saved Interviews is the server's savedInterviewCount, not a total
+  calculated in the CLI. HAS_INTERVIEWS displays as INTERVIEWS (n), including INTERVIEWS (0) when a different persisted
+  interview category blocks deletion. Other reason codes stay unchanged. Null count cells stay blank, including on ERROR
+  rows. A missing value never becomes zero. referenceCount is not displayed or queried separately.
 
-  PASS displays Deletable Yes. BLOCKED displays No and the complete backend message. ERROR displays Error: that version
-  was not fully assessed. The CLI does not create local blockers or replace unavailable metadata/counts with zero. All
-  three counts come directly from the list response. The reference-count counting unit remains subject to product-owner
-  confirmation.
+  --older-than and --deletable filter versions of one Flow and require --flow. Age uses Last Modified Date: --older-than
+  90d includes only versions modified strictly more than 90 days ago. Versions with no last-modified date don't match an
+  age filter. --deletable includes only versions the backend assessed as deletable.
 
-  JSON now follows Core contractVersion 1 with grouped flows and direct per-version counts, deletable, outcome,
-  reasonCode and message. It replaces obsolete client format 6 and its flat rows and repeated error arrays.
-  returnedVersionCount is the displayed aggregate. candidateVersionCount is the server's candidate/prefix metric, not a
-  complete org total. A server listTruncated flag or any per-version ERROR produces exit status 1 after the report is
-  returned. BLOCKED alone leaves status 0. A failed or malformed whole request returns a typed error instead of
-  fabricated inventory.
+  JSON uses the standard sf envelope. Org summaries omit the versions array. Single-Flow version details retain the API
+  field names: versionNumber, status, versionName, createdDate, lastModifiedDate, createdByName, ageDays, runInMode,
+  apiVersion, capacityCategory, areMetricsLoggedToDataCloud, pausedInterviewCount, failedInterviewCount,
+  autosavedInterviewCount, savedInterviewCount, deletable, reasonCode and message. Outcome, blockingReasons and error
+  distinguish a blocked version from an assessment error. The API's deletable value is preserved; ERROR never authorizes
+  deletion. Missing optional fields and unavailable counts are null. JSON preserves false and zero values.
 
-  No Flow, interview, reference or business record is modified. This command never calls Tooling DELETE and requires no
-  confirmation. A later deletion still runs current backend validation.
+  This command only reads data and never deletes versions or interviews. A later delete performs its own validation. To
+  preview a cleanup, run 'sf flow version prune --target-org <org> --flow <Flow API name> --dry-run'.
 
 EXAMPLES
-  List versions of one Flow:
+  Show a summary of every Flow in the org:
 
-    $ sf flow version list --target-org my-org --flow MyFlow
+    $ sf flow version list --target-org prod
 
-  List versions of a namespaced Flow using its qualified API name:
+  List all versions of one Flow:
 
-    $ sf flow version list --target-org my-org --flow billing__MyFlow
+    $ sf flow version list --target-org prod --flow Account_Onboarding
 
-  Find Flows using at least 80 percent of their configured version limit:
+  List deletable versions last modified more than 90 days ago and return JSON:
 
-    $ sf flow version list --target-org my-org --all --min-percent 80
-
-  Return backend PASS versions and any assessment errors as JSON:
-
-    $ sf flow version list --target-org my-org --flow MyFlow --deletable --json
-
-  Return older inactive versions as JSON:
-
-    $ sf flow version list --target-org my-org --flow MyFlow --status inactive --older-than 90d --json
+    $ sf flow version list --target-org prod --flow Account_Onboarding --older-than 90d --deletable --json
 ```
 
 _See code: [src/commands/flow/version/list.ts](https://github.com/salesforcecli/plugin-flow/blob/v2.0.2/src/commands/flow/version/list.ts)_

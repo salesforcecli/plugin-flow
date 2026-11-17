@@ -631,9 +631,11 @@ describe('Flow version customer-facing mutation reports', () => {
 describe('Flow version list exit policy', () => {
   const report = (
     outcomes: Array<'PASS' | 'BLOCKED' | 'ERROR'>,
-    listTruncated = false
+    listTruncated = false,
+    catalogComplete = !listTruncated
   ): Parameters<typeof listExitCode>[0] => ({
     listTruncated,
+    catalogComplete,
     flows: [{ versions: outcomes.map((outcome) => ({ outcome })) }],
   });
   it('returns success for an empty list and assessed blocked rows', () => {
@@ -644,6 +646,14 @@ describe('Flow version list exit policy', () => {
     expect(listExitCode(report(['PASS', 'ERROR']))).to.equal(68);
     expect(listExitCode(report(['BLOCKED', 'ERROR']))).to.equal(68);
     expect(listExitCode(report(['PASS'], true))).to.equal(68);
+  });
+  it('returns success after continuation reconciles an earlier truncated prefix', () => {
+    expect(listExitCode(report(['PASS', 'BLOCKED'], true, true))).to.equal(0);
+    expect(listExitCode(report(['PASS', 'ERROR'], true, true))).to.equal(68);
+    expect(listExitCode(report(['ERROR'], true, true))).to.equal(1);
+  });
+  it('does not mistake a nontruncated filtered list for an incomplete read', () => {
+    expect(listExitCode(report(['PASS', 'BLOCKED'], false, false))).to.equal(0);
   });
   it('returns failure when there are no fully assessed rows in an incomplete result', () => {
     expect(listExitCode(report(['ERROR']))).to.equal(1);

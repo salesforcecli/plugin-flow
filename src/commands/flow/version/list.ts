@@ -25,6 +25,11 @@ import {
 import { Flags, SfCommand } from '@salesforce/sf-plugins-core';
 import { listExitCode } from '../../../reporters/flowVersionMutationReport.js';
 import { formatFlowVersionTable, type FlowVersionTableRow } from '../../../ux/flowVersionTable.js';
+import {
+  formatVersionListResult,
+  projectVersionList,
+  type FlowVersionListCommandResult,
+} from '../../../reporters/flowVersionListReport.js';
 
 Messages.importMessagesDirectoryFromMetaUrl(import.meta.url);
 const messages = Messages.loadMessages('@salesforce/plugin-flow', 'flow.version.list');
@@ -60,7 +65,11 @@ const tableRow = (row: ConnectFlowVersionListVersion): FlowVersionTableRow => ({
   creator: row.createdByName ?? 'Name unavailable',
   createdDate: row.createdDate ?? 'Unavailable',
   lastModifiedDate: row.lastModifiedDate ?? 'Unavailable',
-  references: row.referenceCount === null ? 'Unavailable' : String(row.referenceCount),
+  runInMode: row.runInMode ?? 'Unavailable',
+  apiVersion: row.apiVersion ?? 'Unavailable',
+  capacityCategory: row.capacityCategory ?? 'Unavailable',
+  metricsLoggedToDataCloud:
+    row.areMetricsLoggedToDataCloud == null ? 'Unavailable' : row.areMetricsLoggedToDataCloud ? 'Yes' : 'No',
   paused: row.pausedInterviewCount === null ? 'Unavailable' : String(row.pausedInterviewCount),
   failed: row.failedInterviewCount === null ? 'Unavailable' : String(row.failedInterviewCount),
   deletable: row.outcome === 'PASS' ? 'Yes' : row.outcome === 'BLOCKED' ? 'No' : 'Error',
@@ -94,12 +103,12 @@ export const formatVersionListReport = (report: FlowVersionListCommandReport, wi
   if (report.returnedVersionCount === 0) {
     lines.push(
       '',
-      report.listTruncated
+      report.listTruncated && !report.catalogComplete
         ? 'No matching Flow versions were returned in the inspected scope; the server reports an incomplete list.'
         : 'No Flow versions match the selected scope and filters.'
     );
   }
-  if (report.listTruncated) {
+  if (report.listTruncated && !report.catalogComplete) {
     lines.push(
       '',
       'Warning: The server reports a truncated list. The displayed versions are not a complete inventory.'
@@ -108,7 +117,16 @@ export const formatVersionListReport = (report: FlowVersionListCommandReport, wi
   return `\n${lines.join('\n')}\n`;
 };
 
-export default class FlowVersionList extends SfCommand<FlowVersionListCommandReport> {
+const modifiedAgeDays = (value: string | undefined): number | undefined => {
+  if (value === undefined) return undefined;
+  const days = /^\d+d$/.test(value) ? Number(value.slice(0, -1)) : Number.NaN;
+  if (!Number.isSafeInteger(days) || days > 36_500) {
+    throw messages.createError('error.invalidAge', [], [], 2);
+  }
+  return days;
+};
+
+export default class FlowVersionList extends SfCommand<FlowVersionListCommandResult> {
   public static readonly summary = messages.getMessage('summary');
   public static readonly description = messages.getMessage('description');
   public static readonly examples = messages.getMessages('examples');
@@ -117,17 +135,25 @@ export default class FlowVersionList extends SfCommand<FlowVersionListCommandRep
     'target-org': Flags.requiredOrg(),
     'api-version': Flags.orgApiVersion(),
     flow: Flags.string({ char: 'f', exclusive: ['all'], summary: messages.getMessage('flags.flow.summary') }),
-    all: Flags.boolean({ default: false, exclusive: ['flow'], summary: messages.getMessage('flags.all.summary') }),
-    namespace: Flags.string({ summary: messages.getMessage('flags.namespace.summary') }),
-    status: Flags.string({ summary: messages.getMessage('flags.status.summary') }),
+    all: Flags.boolean({
+      hidden: true,
+      default: false,
+      exclusive: ['flow'],
+      summary: messages.getMessage('flags.all.summary'),
+    }),
+    namespace: Flags.string({ hidden: true, summary: messages.getMessage('flags.namespace.summary') }),
+    status: Flags.string({ hidden: true, summary: messages.getMessage('flags.status.summary') }),
     'older-than': Flags.string({ summary: messages.getMessage('flags.older-than.summary') }),
-    'min-percent': Flags.integer({ summary: messages.getMessage('flags.min-percent.summary') }),
+    'min-percent': Flags.integer({ hidden: true, summary: messages.getMessage('flags.min-percent.summary') }),
     deletable: Flags.boolean({ default: false, summary: messages.getMessage('flags.deletable.summary') }),
   };
 
-  public async run(): Promise<FlowVersionListCommandReport> {
+  public async run(): Promise<FlowVersionListCommandResult> {
     const { flags } = await this.parse(FlowVersionList);
-    if (!flags.flow && !flags.all) throw messages.createError('error.scopeRequired', [], [], 2);
+    if (!flags.flow && (flags['older-than'] !== undefined || flags.deletable)) {
+      throw messages.createError('error.flowRequiredForFilters', [], [], 2);
+    }
+    const olderThanDays = modifiedAgeDays(flags['older-than']);
     if (flags['min-percent'] !== undefined && (flags['min-percent'] < 0 || flags['min-percent'] > 100)) {
       throw messages.createError('error.invalidMinPercent', [], [], 2);
     }
@@ -136,21 +162,24 @@ export default class FlowVersionList extends SfCommand<FlowVersionListCommandRep
     const inventory = await new ConnectFlowVersionListClient(connection)
       .list({
         ...(flags.flow === undefined ? {} : { flowName: flags.flow }),
-        all: flags.all,
+        all: flags.flow === undefined,
         ...(flags.namespace === undefined ? {} : { namespace: flags.namespace }),
         ...(flags.status === undefined ? {} : { status: flags.status }),
-        ...(flags['older-than'] === undefined ? {} : { olderThan: flags['older-than'] }),
         ...(flags['min-percent'] === undefined ? {} : { minPercent: flags['min-percent'] }),
-        deletable: flags.deletable,
       })
       .catch(sdkError);
-    const report: FlowVersionListCommandReport = {
-      ...inventory,
-      targetOrg: org.getUsername() ?? 'authenticated org',
-      apiVersion: connection.getApiVersion(),
-    };
-    if (!this.jsonEnabled()) this.log(formatVersionListReport(report));
-    process.exitCode = listExitCode(report);
+    const report = projectVersionList(inventory, {
+      ...(flags.flow === undefined ? {} : { flowName: flags.flow }),
+      ...(olderThanDays === undefined ? {} : { olderThanDays }),
+      deletable: flags.deletable,
+    });
+    if (inventory.listTruncated && !inventory.catalogComplete) this.warn(messages.getMessage('warning.truncated'));
+    if (inventory.flows.some((flow) => flow.versions.some((version) => version.outcome === 'ERROR'))) {
+      this.warn(messages.getMessage('warning.assessmentErrors'));
+    }
+    if (!this.jsonEnabled())
+      this.log(formatVersionListResult(report, org.getUsername() ?? 'authenticated org', flags.flow));
+    process.exitCode = listExitCode(inventory);
     return report;
   }
 }

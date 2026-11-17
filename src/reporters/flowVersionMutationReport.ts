@@ -386,9 +386,12 @@ export const mutationExitCode = (report: FlowVersionMutationReport): 0 | 1 | 2 |
 /** A partially read/assessed list retains its rows but exits nonzero. Blocked rows are assessed data. */
 export const listExitCode = (report: {
   listTruncated: boolean;
+  catalogComplete: boolean;
   flows: Array<{ versions: Array<{ outcome: 'PASS' | 'BLOCKED' | 'ERROR' }> }>;
 }): 0 | 1 | 68 => {
   const rows = report.flows.flatMap((flow) => flow.versions);
-  if (!report.listTruncated && !rows.some((row) => row.outcome === 'ERROR')) return 0;
+  // Earlier truncated prefixes do not make a reconciled terminal catalog incomplete.
+  const incomplete = report.listTruncated && !report.catalogComplete;
+  if (!incomplete && !rows.some((row) => row.outcome === 'ERROR')) return 0;
   return rows.some((row) => row.outcome !== 'ERROR') ? 68 : 1;
 };

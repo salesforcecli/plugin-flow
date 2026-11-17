@@ -33,6 +33,10 @@ import FlowVersionList, {
   formatVersionListReport,
   type FlowVersionListCommandReport,
 } from '../../../../src/commands/flow/version/list.js';
+import {
+  projectVersionList,
+  type FlowVersionListCommandResult,
+} from '../../../../src/reporters/flowVersionListReport.js';
 import { ConfirmationPrompt } from '../../../../src/ux/confirmation.js';
 import { formatFlowVersionTable, type FlowVersionTableRow } from '../../../../src/ux/flowVersionTable.js';
 
@@ -66,9 +70,15 @@ const reportFixture = (): ConnectFlowVersionListReport => ({
           createdById: '005000000000001AAA',
           createdByName: 'Flow Author',
           lastModifiedDate: '2026-10-02T12:00:00.000Z',
+          runInMode: 'DefaultMode',
+          apiVersion: '66.0',
+          capacityCategory: 'Default',
+          areMetricsLoggedToDataCloud: false,
           referenceCount: null,
           pausedInterviewCount: 0,
           failedInterviewCount: 0,
+          autosavedInterviewCount: 0,
+          savedInterviewCount: 0,
           deletable: true,
           outcome: 'PASS',
           reasonCode: null,
@@ -83,29 +93,30 @@ const commandReportFixture = (report = reportFixture()): FlowVersionListCommandR
   targetOrg: 'poc@example.com',
   apiVersion: '67.0',
 });
-const blocked = (
-  report: ConnectFlowVersionListReport,
-  message = 'PAUSED_INTERVIEWS (2); REFERENCED_BY_VERSION (ParentFlow)'
-): void => {
+const blocked = (report: ConnectFlowVersionListReport, message = 'This version has saved interviews.'): void => {
   Object.assign(report.flows[0].versions[0], {
     outcome: 'BLOCKED',
     deletable: false,
-    reasonCode: 'PAUSED_INTERVIEWS',
+    reasonCode: 'HAS_INTERVIEWS',
     message,
     referenceCount: null,
     pausedInterviewCount: 2,
     failedInterviewCount: 1,
+    autosavedInterviewCount: 7,
+    savedInterviewCount: 10,
   });
 };
 const errored = (report: ConnectFlowVersionListReport): void => {
   Object.assign(report.flows[0].versions[0], {
     outcome: 'ERROR',
     deletable: false,
-    reasonCode: 'OWNED_RESOURCE_CHECK_INCOMPLETE',
+    reasonCode: 'OPERATIONAL',
     message: null,
     referenceCount: null,
     pausedInterviewCount: null,
     failedInterviewCount: null,
+    autosavedInterviewCount: null,
+    savedInterviewCount: null,
   });
 };
 const wirePage = (report = reportFixture()): object => ({
@@ -130,7 +141,7 @@ describe('flow version list command', () => {
   let getConnection: sinon.SinonStub;
   let log: sinon.SinonStub;
   let logJson: sinon.SinonStub;
-  let logToStderr: sinon.SinonStub;
+  let warn: sinon.SinonStub;
   let execute: sinon.SinonStub;
   let confirm: sinon.SinonStub;
   let request: sinon.SinonStub;
@@ -155,7 +166,7 @@ describe('flow version list command', () => {
     const ux = stubSfCommandUx(sandbox);
     log = ux.log;
     logJson = ux.logJson;
-    logToStderr = ux.logToStderr;
+    warn = ux.warn;
     request = sandbox.stub();
     getConnection = sandbox
       .stub()
@@ -173,125 +184,224 @@ describe('flow version list command', () => {
     sandbox.restore();
   });
 
-  it('lists an arbitrary Flow using only the authenticated Connect list client', async () => {
+  it('lists an arbitrary Flow and projects only the customer-facing contract', async () => {
     const result = await FlowVersionList.run(args);
-    expect(list.calledOnceWithExactly({ flowName: 'Invoice_Approval', all: false, deletable: false })).to.equal(true);
-    expect(result).to.deep.equal(commandReportFixture(report));
+    expect(list.calledOnceWithExactly({ flowName: 'Invoice_Approval', all: false })).to.equal(true);
+    expect(result).to.have.all.keys('flows');
+    expect(result.flows[0]).to.include({
+      flow: 'Invoice_Approval',
+      versionCount: 3,
+      versionLimit: 25,
+      deletableCount: null,
+    });
+    expect(result.flows[0].versions![0]).to.deep.equal({
+      versionNumber: 2,
+      status: 'Draft',
+      versionName: 'Invoice Approval - Review',
+      createdDate: '2026-10-01T12:00:00.000Z',
+      lastModifiedDate: '2026-10-02T12:00:00.000Z',
+      createdByName: 'Flow Author',
+      ageDays: 26,
+      runInMode: 'DefaultMode',
+      apiVersion: '66.0',
+      capacityCategory: 'Default',
+      areMetricsLoggedToDataCloud: false,
+      pausedInterviewCount: 0,
+      failedInterviewCount: 0,
+      autosavedInterviewCount: 0,
+      savedInterviewCount: 0,
+      deletable: true,
+      outcome: 'PASS',
+      reasonCode: null,
+      message: null,
+      blockingReasons: [],
+    });
     expect(getConnection.calledOnceWithExactly(undefined)).to.equal(true);
-    expect(log.calledOnce).to.equal(true);
-    expect(String(log.firstCall.args[0])).to.include('Deletable');
+    expect(String(log.firstCall.args[0])).to.include('Last Modified');
   });
-  it('forwards API version, native status, age and usage filters', async () => {
-    await FlowVersionList.run([
-      '-o',
-      'source',
-      '-f',
-      'billing__Receipt_Reconciliation',
-      '--api-version',
-      '67.0',
-      '--status',
-      'Draft',
-      '--older-than',
-      '90d',
-      '--min-percent',
-      '80',
-    ]);
-    expect(
-      list.calledOnceWithExactly({
-        flowName: 'billing__Receipt_Reconciliation',
-        all: false,
-        deletable: false,
-        status: 'Draft',
-        olderThan: '90d',
-        minPercent: 80,
-      })
-    ).to.equal(true);
-    expect(getConnection.calledOnceWithExactly('67.0')).to.equal(true);
-  });
-  it('forwards --deletable to the server-backed SDK without local eligibility rules', async () => {
-    await FlowVersionList.run([...args, '--deletable']);
-    expect(list.firstCall.args[0]).to.deep.equal({ flowName: 'Invoice_Approval', all: false, deletable: true });
-  });
-  it('supports an all-org scope without injecting namespace restrictions', async () => {
-    await FlowVersionList.run(['-o', 'source', '--all']);
-    expect(list.firstCall.args[0]).to.deep.equal({ all: true, deletable: false });
-  });
-  it('returns native grouped contract 1 and authoritative counts without duplicate legacy arrays', async () => {
-    const result = await FlowVersionList.run([...args, '--json']);
-    expect(result).to.deep.equal(commandReportFixture(report));
-    expect(result.contractVersion).to.equal('1');
-    expect(result.flows[0].versions[0].referenceCount).to.equal(null);
-    for (const field of ['rows', 'assessmentErrors', 'countErrors', 'capacityErrors'])
-      expect(result).not.to.have.property(field);
+  it('defaults to an org summary without requiring --all and omits version arrays', async () => {
+    const result = await FlowVersionList.run(['-o', 'source', '--json']);
+    expect(list.firstCall.args[0]).to.deep.equal({ all: true });
+    expect(result.flows[0]).not.to.have.property('versions');
     expect(log.called).to.equal(false);
-    expect(logToStderr.called).to.equal(false);
     expect(logJson.firstCall.args[0]).to.deep.include({ status: 0, result });
   });
-  it('retains mixed PASS and ERROR rows in JSON and exits 68 after returning the report', async () => {
-    const success = structuredClone(report.flows[0].versions[0]);
-    errored(report);
-    report.flows[0].versions.push({ ...success, versionNumber: 3, versionId: '301000000000003AAA' });
-    report.returnedVersionCount = 2;
-    const result = await FlowVersionList.run([...args, '--json']);
-    expect(result.flows[0].versions).to.have.length(2);
-    expect(process.exitCode).to.equal(68);
-    expect(logJson.firstCall.args[0]).to.deep.include({ status: 68, result });
+  it('retains --all as a hidden compatibility option', async () => {
+    await FlowVersionList.run(['-o', 'source', '--all']);
+    expect(list.firstCall.args[0]).to.deep.equal({ all: true });
+    expect(FlowVersionList.flags.all.hidden).to.equal(true);
   });
-  it('does not treat BLOCKED alone as an operational failure', async () => {
+  it('keeps age and eligibility filters local instead of invoking the created-date backend filter', async () => {
+    await FlowVersionList.run([...args, '--older-than', '90d', '--deletable', '--api-version', '67.0']);
+    expect(list.firstCall.args[0]).to.deep.equal({ flowName: 'Invoice_Approval', all: false });
+    expect(getConnection.calledOnceWithExactly('67.0')).to.equal(true);
+  });
+  it('retains hidden status and usage compatibility filters', async () => {
+    await FlowVersionList.run([...args, '--status', 'Draft', '--min-percent', '80']);
+    expect(list.firstCall.args[0]).to.deep.equal({
+      flowName: 'Invoice_Approval',
+      all: false,
+      status: 'Draft',
+      minPercent: 80,
+    });
+    expect(FlowVersionList.flags.status.hidden).to.equal(true);
+    expect(FlowVersionList.flags['min-percent'].hidden).to.equal(true);
+  });
+  it('filters --deletable using the actual PASS verdict rather than counts or status', async () => {
     blocked(report);
-    await FlowVersionList.run([...args, '--json']);
+    const result = await FlowVersionList.run([...args, '--deletable', '--json']);
+    expect(result.flows[0].versions).to.deep.equal([]);
     expect(process.exitCode).to.equal(0);
-    expect(logJson.firstCall.args[0]).to.include({ status: 0 });
   });
-  it('marks a server-truncated result incomplete in console and JSON exit status', async () => {
-    report.listTruncated = true;
-    const result = await FlowVersionList.run(args);
-    expect(result.listTruncated).to.equal(true);
-    expect(process.exitCode).to.equal(68);
-    expect(String(log.firstCall.args[0])).to.include('not a complete inventory');
+  it('uses the API saved-interview total without calculating it from category counts', async () => {
+    blocked(report);
+    const result = await FlowVersionList.run([...args, '--json']);
+    expect(result.flows[0].versions![0].blockingReasons[0]).to.include({ code: 'INTERVIEWS', count: 10 });
+    expect(result.flows[0].versions![0]).to.include({
+      pausedInterviewCount: 2,
+      failedInterviewCount: 1,
+      autosavedInterviewCount: 7,
+      savedInterviewCount: 10,
+      reasonCode: 'HAS_INTERVIEWS',
+      message: 'This version has saved interviews.',
+    });
+    expect(result.flows[0].versions![0].deletable).to.equal(false);
+    expect(process.exitCode).to.equal(0);
   });
-  it('returns exit 1 when every returned version has an assessment error', async () => {
+  it('preserves ERROR as unknown eligibility instead of labeling it blocked', async () => {
     errored(report);
     const result = await FlowVersionList.run([...args, '--json']);
+    expect(result.flows[0].versions![0]).to.include({
+      deletable: false,
+      outcome: 'ERROR',
+      reasonCode: 'OPERATIONAL',
+      message: null,
+      error: 'OPERATIONAL',
+    });
+    expect(result.flows[0].versions![0].blockingReasons).to.deep.equal([]);
+    expect(result.flows[0].deletableCount).to.equal(null);
     expect(process.exitCode).to.equal(1);
-    expect(logJson.firstCall.args[0]).to.deep.include({ status: 1, result });
   });
-  it('returns exit 1 for an empty incomplete catalog, without claiming partial success', async () => {
+  it('does not certify a deletable count on a truncated catalog', async () => {
+    report.listTruncated = true;
+    const result = await FlowVersionList.run([...args, '--json']);
+    expect(result.flows[0].deletableCount).to.equal(null);
+    expect(process.exitCode).to.equal(68);
+  });
+  for (const json of [false, true]) {
+    it(`reports complete counts after recovering an earlier truncated page in ${
+      json ? 'JSON' : 'console'
+    } output`, async () => {
+      list.restore();
+      native = true;
+      const flow = { ...report.flows[0], versionCount: 2, limitPercent: 8 };
+      const version = report.flows[0].versions[0];
+      request.onFirstCall().resolves({
+        ...wirePage(),
+        candidateVersionCount: 1,
+        listTruncated: true,
+        nextOffset: 1,
+        flows: [{ ...flow, versions: [{ ...version, versionId: '301xx000003Ga19', versionNumber: 1 }] }],
+      });
+      request.onSecondCall().resolves({
+        ...wirePage(),
+        candidateVersionCount: 2,
+        listTruncated: false,
+        nextOffset: null,
+        flows: [
+          {
+            ...flow,
+            versions: [
+              {
+                ...version,
+                versionId: '301xx000003Ga20',
+                versionNumber: 2,
+                status: 'Active',
+                outcome: 'BLOCKED',
+                deletable: false,
+                reasonCode: 'ACTIVE_VERSION',
+                message: 'Active versions cannot be deleted.',
+              },
+            ],
+          },
+        ],
+      });
+
+      const result = await FlowVersionList.run(['-o', 'source', '--all', ...(json ? ['--json'] : [])]);
+
+      expect(request.calledTwice).to.equal(true);
+      expect(
+        request
+          .getCalls()
+          .map((call) => (JSON.parse((call.args[0] as { body: string }).body) as { offset: number }).offset)
+      ).to.deep.equal([0, 1]);
+      expect(result.flows).to.deep.equal([
+        { flow: 'Invoice_Approval', versionCount: 2, versionLimit: 25, deletableCount: 1 },
+      ]);
+      expect(warn.called).to.equal(false);
+      expect(process.exitCode).to.equal(0);
+      if (json) {
+        expect(log.called).to.equal(false);
+        expect(logJson.firstCall.args[0]).to.deep.include({ status: 0, result });
+        expect((logJson.firstCall.args[0] as { warnings?: unknown[] }).warnings ?? []).to.deep.equal([]);
+      } else {
+        expect(stripVTControlCharacters(String(log.firstCall.args[0]))).not.to.include('Unavailable');
+      }
+    });
+  }
+  it('returns a genuinely empty org summary successfully', async () => {
     report.flows = [];
     report.returnedVersionCount = 0;
-    report.listTruncated = true;
-    await FlowVersionList.run([...args, '--json']);
-    expect(process.exitCode).to.equal(1);
+    report.catalogComplete = true;
+    const result = await FlowVersionList.run(['-o', 'source', '--json']);
+    expect(result).to.deep.equal({ flows: [] });
+    expect(process.exitCode).to.equal(0);
   });
-  it('keeps an actual zero limit and null percentage without inventing capacity errors', async () => {
+  it('preserves an actual configured zero limit', async () => {
     report.versionLimit = 0;
     report.flows[0].limitPercent = null;
     const result = await FlowVersionList.run([...args, '--json']);
-    expect(result.versionLimit).to.equal(0);
-    expect(result.flows[0].limitPercent).to.equal(null);
-    expect(process.exitCode).to.equal(0);
+    expect(result.flows[0].versionLimit).to.equal(0);
   });
-  it('maps typed SDK validation and protocol failures to SfError', async () => {
+  for (const filterArgs of [['--older-than', '90d'], ['--deletable']]) {
+    it(`requires --flow for ${filterArgs[0]} before opening a connection`, async () => {
+      const error = await expectError(['-o', 'source', ...filterArgs], 'require --flow');
+      expect((error as SfError).exitCode).to.equal(2);
+      expect(list.called).to.equal(false);
+      expect(getConnection.called).to.equal(false);
+    });
+  }
+  for (const age of ['90h', '-1d', '36501d', '9007199254740992d']) {
+    it(`rejects malformed age ${age} before opening a connection`, async () => {
+      const error = await expectError([...args, '--older-than', age]);
+      expect((error as SfError).exitCode).to.equal(2);
+      expect(getConnection.called).to.equal(false);
+    });
+  }
+  for (const value of ['-1', '101', '80.5', 'many']) {
+    it(`rejects invalid --min-percent ${value}`, async () => {
+      const error = await expectError([...args, '--min-percent', value]);
+      expect((error as SfError).exitCode ?? (error as { oclif?: { exit?: number } }).oclif?.exit).to.equal(2);
+      expect(getConnection.called).to.equal(false);
+    });
+  }
+  it('rejects simultaneous --flow and --all', async () => {
+    await expectError([...args, '--all']);
+    expect(list.called).to.equal(false);
+    expect(getConnection.called).to.equal(false);
+  });
+  it('rejects unsupported namespace filtering without an HTTP request', async () => {
+    list.restore();
+    await expectError([...args, '--namespace', 'billing'], 'namespace');
+    expect(request.called).to.equal(false);
+  });
+  it('reports typed protocol failures without fabricated data', async () => {
     list.rejects(new FlowVersionError('INVALID_LIST_RESPONSE', 'List response rejected.'));
     const error = await expectError(args, 'List response rejected.');
-    expect(error).to.be.instanceOf(SfError);
     expect((error as SfError).code).to.equal('INVALID_LIST_RESPONSE');
     expect(log.called).to.equal(false);
   });
-  for (const commandArgs of [
-    ['-o', 'source', '--flow', 'bad flow'],
-    [...args, '--status', 'not-a-status'],
-    [...args, '--older-than', '90h'],
-    [...args, '--namespace', 'package'],
-  ]) {
-    it(`reports invalid client input as usage 2 without HTTP: ${commandArgs.slice(2).join(' ')}`, async () => {
-      list.restore();
-      const error = await expectError(commandArgs);
-      expect((error as SfError).exitCode).to.equal(2);
-      expect(request.called).to.equal(false);
-    });
-  }
-  it('rejects an unsupported selected API version as usage 2 before HTTP', async () => {
+  it('rejects an unsupported API version before HTTP', async () => {
     list.restore();
     getConnection.returns({
       getApiVersion: () => '66.0',
@@ -302,105 +412,31 @@ describe('flow version list command', () => {
     expect((error as SfError).exitCode).to.equal(2);
     expect(request.called).to.equal(false);
   });
-  it('preserves a normal SDK whole-request failure', async () => {
-    list.rejects(new SfError('List request failed.', 'LIST_REQUEST_FAILED'));
-    expect((await expectError(args, 'List request failed.')).name).to.equal('LIST_REQUEST_FAILED');
-  });
-  it('routes normal spaced command words and standard flags through the real CLI', async () => {
+  it('routes standard command words and flags through the real command loader', async () => {
     const result = await runCli(['flow', 'version', 'list', ...args, '--json'], {
       root: fileURLToPath(new URL('../../../../', import.meta.url)),
       devPlugins: false,
       userPlugins: false,
     });
-    expect(result).to.deep.equal(commandReportFixture(report));
+    expect(result).to.have.all.keys('flows');
     expect(list.calledOnce).to.equal(true);
   });
-  it('requires exactly one scope before opening a connection', async () => {
-    const error = await expectError(['-o', 'source'], 'Choose exactly one scope');
-    expect((error as SfError).exitCode).to.equal(2);
-    expect(list.called).to.equal(false);
-    expect(getConnection.called).to.equal(false);
-  });
-  it('rejects simultaneous --flow and --all', async () => {
-    await expectError([...args, '--all']);
-    expect(list.called).to.equal(false);
-    expect(getConnection.called).to.equal(false);
-  });
-  for (const value of ['-1', '101', '80.5', 'many']) {
-    it(`rejects invalid --min-percent ${value}`, async () => {
-      const error = await expectError([...args, '--min-percent', value]);
-      expect((error as SfError).exitCode ?? (error as { oclif?: { exit?: number } }).oclif?.exit).to.equal(2);
-      expect(list.called).to.equal(false);
-      expect(getConnection.called).to.equal(false);
-    });
-  }
-  for (const value of ['0', '100']) {
-    it(`accepts the --min-percent boundary ${value}`, async () => {
-      await FlowVersionList.run([...args, '--min-percent', value]);
-      expect(list.firstCall.args[0]).to.include({ minPercent: Number(value) });
-    });
-  }
-  it('rejects mutation flags', async () => {
-    await expectError([...args, '--force'], '--force');
-    expect(list.called).to.equal(false);
-  });
-  it('provides help without authenticating', async () => {
-    await runCli(['flow', 'version', 'list', '--help'], {
-      root: fileURLToPath(new URL('../../../../', import.meta.url)),
-      devPlugins: false,
-      userPlugins: false,
-    });
-    expect(list.called).to.equal(false);
-    expect(getConnection.called).to.equal(false);
-  });
-  it('calls only the Core list endpoint through the native connection interface', async () => {
+  it('calls only the existing Core list route and never sends the created-date filter', async () => {
     list.restore();
     native = true;
     request.resolves(wirePage());
-    const result = await FlowVersionList.run([...args, '--api-version', '67.0', '--json']);
-    expect(result.flows[0].versions[0].referenceCount).to.equal(null);
+    await FlowVersionList.run([...args, '--older-than', '0d', '--deletable', '--json']);
     expect(request.calledOnce).to.equal(true);
     const [req, opts] = request.firstCall.args as [{ method: string; url: string; body: string }, unknown];
-    const body = JSON.parse(req.body) as Record<string, unknown>;
     expect(req.method).to.equal('POST');
     expect(req.url).to.equal('/connect/interaction/flow-versions/list');
-    expect(body).to.include({
+    expect(JSON.parse(req.body)).to.deep.equal({
       contractVersion: '1',
       flowApiName: 'Invoice_Approval',
       offset: 0,
       limit: 100,
     });
-    expect(body).not.to.have.property('deletable');
     expect(opts).to.deep.include({ followRedirect: false, retry: { methods: [], maxRetries: 0 } });
-  });
-  it('continues an empty page using the server nextOffset instead of row count', async () => {
-    list.restore();
-    native = true;
-    const filtered = reportFixture();
-    filtered.candidateVersionCount = 600;
-    filtered.versionLimit = 1000;
-    filtered.flows[0].versionCount = 600;
-    filtered.flows[0].limitPercent = 60;
-    const page = {
-      ...wirePage(filtered),
-      candidateVersionCount: 600,
-      flows: structuredClone(filtered.flows),
-    };
-    request.onFirstCall().resolves({ ...page, returnedVersionCount: 0, flows: [], nextOffset: 500 });
-    request.onSecondCall().resolves(page);
-    const result = await FlowVersionList.run([...args, '--deletable', '--json']);
-    expect(request.callCount).to.equal(2);
-    const body = JSON.parse((request.secondCall.args[0] as { body: string }).body) as Record<string, unknown>;
-    expect(body.offset).to.equal(500);
-    expect(body.deletable).to.equal(true);
-    expect(result.returnedVersionCount).to.equal(1);
-    expect(result.candidateVersionCount).to.equal(600);
-  });
-  it('rejects unsupported namespace filtering before any API request', async () => {
-    list.restore();
-    native = true;
-    await expectError([...args, '--namespace', 'billing'], 'namespace');
-    expect(request.called).to.equal(false);
   });
 });
 
@@ -413,7 +449,7 @@ const tableText = (value: string): string =>
 const textWithoutLayout = (value: string): string => tableText(value).replace(/\s/gu, '');
 
 describe('formatVersionListReport', () => {
-  it('displays every required A3/C1 field and actual Core capacity/count values', () => {
+  it('displays Setup version fields and available Core capacity/count values', () => {
     const report = commandReportFixture();
     const output = formatVersionListReport(report, 120);
     const text = tableText(output);
@@ -428,7 +464,10 @@ describe('formatVersionListReport', () => {
       'Created By Flow Author',
       'Created Date 2026-10-01T12:00:00.000Z',
       'Last Modified Date 2026-10-02T12:00:00.000Z',
-      'Referenced By Unavailable',
+      'Run in Mode DefaultMode',
+      'Flow API Version 66.0',
+      'Capacity Category Default',
+      'Log Metrics to Data Cloud No',
       'Paused Interviews 0',
       'Failed Interviews 0',
       'Deletable Yes',
@@ -445,14 +484,44 @@ describe('formatVersionListReport', () => {
   });
   it('shows No and the complete opaque backend explanation without extra evidence lookup', () => {
     const report = commandReportFixture();
-    const message = 'PAUSED_INTERVIEWS (2); REFERENCED_BY_VERSION (ParentFlow, OtherFlow)';
+    const message = 'This version has saved interviews.';
     blocked(report, message);
     const output = formatVersionListReport(report, 100);
     expect(tableText(output)).to.include('Deletable No');
     expect(textWithoutLayout(output)).to.include(message.replace(/\s/gu, ''));
-    for (const value of ['Referenced By Unavailable', 'Paused Interviews 2', 'Failed Interviews 1'])
-      expect(tableText(output)).to.include(value);
+    for (const value of ['Paused Interviews 2', 'Failed Interviews 1']) expect(tableText(output)).to.include(value);
     expect(output).not.to.include('Blocker details');
+  });
+  it('keeps the list verdict independent of deletion preview and other saved-interview statuses', () => {
+    const report = commandReportFixture();
+    Object.assign(report.flows[0].versions[0], {
+      deletable: false,
+      outcome: 'BLOCKED',
+      reasonCode: 'HAS_INTERVIEWS',
+      message: 'This version has saved interviews.',
+      pausedInterviewCount: 0,
+      failedInterviewCount: 0,
+    });
+    const text = tableText(formatVersionListReport(report, 120));
+    expect(text).to.include('Paused Interviews 0');
+    expect(text).to.include('Failed Interviews 0');
+    expect(text).to.include('Deletable No');
+    expect(text).to.include('Reason This version has saved interviews.');
+    expect(text).not.to.include('Referenced By');
+  });
+  it('shows a blocked unsupported status using the list reason without converting it to a delete error', () => {
+    const report = commandReportFixture();
+    Object.assign(report.flows[0].versions[0], {
+      status: 'UnderReview',
+      deletable: false,
+      outcome: 'BLOCKED',
+      reasonCode: 'STATUS_NOT_DELETABLE',
+      message: 'This version cannot be deleted in its current status.',
+    });
+    const text = tableText(formatVersionListReport(report, 120));
+    expect(text).to.include('Status UnderReview');
+    expect(text).to.include('Deletable No');
+    expect(text).to.include('Reason This version cannot be deleted in its current status.');
   });
   it('preserves unknown future reason messages', () => {
     const report = commandReportFixture();
@@ -464,7 +533,6 @@ describe('formatVersionListReport', () => {
     const report = commandReportFixture();
     Object.assign(report.flows[0].versions[0], {
       status: 'Active',
-      referenceCount: null,
       pausedInterviewCount: 9,
       failedInterviewCount: 3,
     });
@@ -477,11 +545,10 @@ describe('formatVersionListReport', () => {
     errored(report);
     const text = tableText(formatVersionListReport(report, 120));
     expect(text).to.include('Deletable Error');
-    expect(text).to.include('Reason OWNED_RESOURCE_CHECK_INCOMPLETE');
-    for (const field of ['Referenced By', 'Paused Interviews', 'Failed Interviews'])
-      expect(text).to.include(field + ' Unavailable');
+    expect(text).to.include('Reason OPERATIONAL');
+    for (const field of ['Paused Interviews', 'Failed Interviews']) expect(text).to.include(field + ' Unavailable');
     expect(text).not.to.include('Deletable No');
-    expect(text).not.to.include('Referenced By 0');
+    expect(text).not.to.include('Referenced By');
   });
   it('preserves the server integer utilization percentage rather than recalculating it', () => {
     const report = commandReportFixture();
@@ -499,6 +566,10 @@ describe('formatVersionListReport', () => {
       lastModifiedDate: null,
       ageDays: null,
       status: null,
+      runInMode: null,
+      apiVersion: null,
+      capacityCategory: null,
+      areMetricsLoggedToDataCloud: null,
     });
     report.flows[0].versionCount = null;
     report.flows[0].limitPercent = null;
@@ -510,9 +581,24 @@ describe('formatVersionListReport', () => {
       'Last Modified Date Unavailable',
       'Created By Name unavailable',
       'Flow Version Name Name unavailable',
+      'Run in Mode Unavailable',
+      'Flow API Version Unavailable',
+      'Capacity Category Unavailable',
+      'Log Metrics to Data Cloud Unavailable',
     ])
       expect(text).to.include(field);
     expect(text).to.include('count unavailable/25 (percentage unavailable)');
+  });
+  it('distinguishes true, false and unavailable Data Cloud metrics values', () => {
+    const report = commandReportFixture();
+    const version = report.flows[0].versions[0];
+    version.areMetricsLoggedToDataCloud = true;
+    expect(tableText(formatVersionListReport(report, 120))).to.include('Log Metrics to Data Cloud Yes');
+    version.areMetricsLoggedToDataCloud = false;
+    expect(tableText(formatVersionListReport(report, 120))).to.include('Log Metrics to Data Cloud No');
+    delete version.areMetricsLoggedToDataCloud;
+    expect(tableText(formatVersionListReport(report, 120))).to.include('Log Metrics to Data Cloud Unavailable');
+    expect(version).not.to.have.property('areMetricsLoggedToDataCloud');
   });
   it('keeps zero limit and undefined percentage explicit', () => {
     const report = commandReportFixture();
@@ -532,6 +618,15 @@ describe('formatVersionListReport', () => {
     const output = formatVersionListReport(report);
     expect(output).to.include('incomplete list');
     expect(output).not.to.include('No Flow versions match');
+  });
+  it('does not warn when continuation recovered the complete catalog', () => {
+    const report = commandReportFixture();
+    Object.assign(report, { listTruncated: true, catalogComplete: true, candidateVersionCount: 1 });
+    Object.assign(report.flows[0], { versionCount: 1, limitPercent: 4 });
+    const output = formatVersionListReport(report);
+    expect(output).not.to.include('Warning:');
+    expect(output).not.to.include('incomplete list');
+    expect(output).to.include('Invoice_Approval');
   });
   it('sanitizes backend and org control characters while preserving JSON values separately', () => {
     const report = commandReportFixture();
@@ -559,14 +654,17 @@ describe('standard Flow version table', () => {
     creator: 'Flow Author',
     createdDate: '2026-10-01T12:00:00.000Z',
     lastModifiedDate: '2026-10-02T12:00:00.000Z',
-    references: '2',
+    runInMode: 'DefaultMode',
+    apiVersion: '66.0',
+    capacityCategory: 'Default',
+    metricsLoggedToDataCloud: 'No',
     paused: '1',
     failed: '1',
     deletable: 'No',
-    reason: 'PAUSED_INTERVIEWS (1); FUTURE_SERVER_POLICY (a complete explanation that must never be truncated)',
+    reason: 'HAS_INTERVIEWS; FUTURE_SERVER_POLICY (a complete explanation that must never be truncated)',
   });
 
-  it('uses all A3/C1 columns in wide consoles and keeps every complete value', () => {
+  it('uses every supported column in wide consoles and keeps every complete value', () => {
     const value = row();
     const text = formatFlowVersionTable([value], 360);
     const dataLines = plainText(text)
@@ -600,132 +698,51 @@ describe('standard Flow version table', () => {
   });
 });
 
-describe('Flow version list JSON contract', () => {
-  const schema = JSON.parse(
+describe('Flow version list customer JSON contract', () => {
+  const generatedSchema = JSON.parse(
     readFileSync(new URL('../../../../schemas/flow-version-list.json', import.meta.url), 'utf8')
   ) as object;
-  const validateGenerated = new Ajv({ allErrors: true }).compile(schema);
-  // Keep cross-field product invariants separate from the reproducible generated type schema.
-  const contract = JSON.parse(
+  const validateGenerated = new Ajv({ allErrors: true }).compile(generatedSchema);
+  const schema = JSON.parse(
     readFileSync(new URL('../../../contracts/flow-version-list.json', import.meta.url), 'utf8')
   ) as object;
-  const validate = new Ajv({ allErrors: true }).compile(contract);
-  const expectValidReport = (report: FlowVersionListCommandReport): void => {
+  const validate = new Ajv({ allErrors: true }).compile(schema);
+  const projected = (report = reportFixture()): FlowVersionListCommandResult =>
+    projectVersionList(report, { flowName: 'Invoice_Approval' });
+  const expectValid = (report: FlowVersionListCommandResult): void => {
     expect(validateGenerated(report), JSON.stringify(validateGenerated.errors)).to.equal(true);
     expect(validate(report), JSON.stringify(validate.errors)).to.equal(true);
   };
-  it('validates a fixture-backed command JSON result against both contracts', async () => {
-    const sandbox = sinon.createSandbox();
-    const originalExitCode = process.exitCode;
-    try {
-      const ux = stubSfCommandUx(sandbox);
-      sandbox.stub(Org, 'create').resolves({
-        getConnection: () => ({ getApiVersion: () => '67.0' }),
-        getUsername: () => 'poc@example.com',
-      } as unknown as Org);
-      sandbox.stub(ConnectFlowVersionListClient.prototype, 'list').resolves(reportFixture());
-      const result = await FlowVersionList.run(['--target-org', 'fixture-org', '--flow', 'Invoice_Approval', '--json']);
-      expectValidReport(result);
-      expect(ux.logJson.firstCall.args[0]).to.deep.include({ status: 0, result });
-    } finally {
-      process.exitCode = originalExitCode;
-      sandbox.restore();
-    }
+  it('validates projected single-Flow details and org summaries', () => {
+    for (const result of [projected(), projectVersionList(reportFixture())]) expectValid(result);
+  });
+  it('validates blocked and failed assessment rows without fabricating counts', () => {
+    const report = reportFixture();
+    blocked(report);
+    expectValid(projected(report));
+    errored(report);
+    expectValid(projected(report));
   });
   it('rejects structurally malformed output using the generated schema', () => {
-    const report = { ...commandReportFixture(), versionLimit: 'not-a-number' };
+    const report = projected();
+    Object.assign(report.flows[0], { versionLimit: 'not-a-number' });
     expect(validateGenerated(report)).to.equal(false);
   });
-  it('validates native grouped rows with authoritative counts and configured limit', () => {
-    const report = commandReportFixture();
-    expectValidReport(report);
-    expect(report.contractVersion).to.equal('1');
-    expect(report.flows[0].versions[0]).not.to.have.property('assessment');
-  });
-  it('accepts optional Setup version-view metadata returned by the merged SDK', () => {
-    const report = commandReportFixture();
-    Object.assign(report.flows[0].versions[0], {
-      runInMode: 'DefaultMode',
-      apiVersion: '69',
-      capacityCategory: null,
-      areMetricsLoggedToDataCloud: false,
-    });
-    expectValidReport(report);
-    Object.assign(report.flows[0].versions[0], { areMetricsLoggedToDataCloud: 'false' });
+  it('rejects contradictory eligibility shapes', () => {
+    const report = projected();
+    report.flows[0].versions![0].deletable = false;
+    expect(validate(report)).to.equal(false);
+    Object.assign(report.flows[0].versions![0], { deletable: null });
     expect(validate(report)).to.equal(false);
   });
-  it('validates BLOCKED and ERROR without duplicated error collections', () => {
-    const report = commandReportFixture();
-    blocked(report);
-    expectValidReport(report);
-    errored(report);
-    expectValidReport(report);
-  });
-  it('permits real null metadata and incomplete totals without guessing them', () => {
-    const report = commandReportFixture();
-    errored(report);
-    report.flows[0].versionCount = null;
-    report.flows[0].limitPercent = null;
-    Object.assign(report.flows[0].versions[0], {
-      createdDate: null,
-      createdById: null,
-      lastModifiedDate: null,
-      ageDays: null,
-    });
-    expectValidReport(report);
-  });
-  it('accepts a zero configured limit only with null percentage', () => {
-    const report = commandReportFixture();
-    report.versionLimit = 0;
-    expect(validate(report)).to.equal(false);
-    report.flows[0].limitPercent = null;
-    expectValidReport(report);
-  });
-  it('rejects contradictory eligibility outcomes', () => {
-    const report = commandReportFixture();
-    report.flows[0].versions[0].deletable = false;
-    expect(validate(report)).to.equal(false);
-    blocked(report);
-    report.flows[0].versions[0].deletable = true;
-    expect(validate(report)).to.equal(false);
-    errored(report);
-    report.flows[0].versions[0].deletable = true;
-    expect(validate(report)).to.equal(false);
-  });
-  it('requires null references and nonnegative available interview counts', () => {
-    const report = commandReportFixture();
-    Object.assign(report.flows[0].versions[0], { referenceCount: -1 });
-    expect(validate(report)).to.equal(false);
-    report.flows[0].versions[0].referenceCount = null;
-    expect(validate(report)).to.equal(true);
-    report.flows[0].versions[0].pausedInterviewCount = -1;
-    expect(validate(report)).to.equal(false);
-    report.flows[0].versions[0].pausedInterviewCount = null;
-    expect(validate(report)).to.equal(false);
-    report.flows[0].versions[0].pausedInterviewCount = 0;
-    delete (report.flows[0].versions[0] as unknown as Record<string, unknown>).failedInterviewCount;
-    expect(validate(report)).to.equal(false);
-  });
-  it('rejects obsolete format6 arrays and synthesized assessment/evidence fields', () => {
-    for (const field of ['rows', 'assessmentErrors', 'countErrors', 'capacityErrors']) {
-      const report = commandReportFixture();
-      Object.assign(report, { [field]: [] });
+  it('does not expose internal SDK result fields', () => {
+    for (const field of ['scope', 'filters', 'candidateVersionCount', 'orgId', 'contractVersion']) {
+      const report = projected();
+      Object.assign(report, { [field]: 'unexpected' });
       expect(validate(report), field).to.equal(false);
     }
-    for (const field of ['assessment', 'evidence', 'c1Counts', 'countError', 'capacityError']) {
-      const report = commandReportFixture();
-      Object.assign(report.flows[0].versions[0], { [field]: [] });
-      expect(validate(report), field).to.equal(false);
-    }
-    const report = commandReportFixture();
-    Object.assign(report, { contractVersion: '6' });
+    const report = projected();
+    Object.assign(report.flows[0].versions![0], { referenceCount: 0 });
     expect(validate(report)).to.equal(false);
-  });
-  it('validates a preserved server truncation flag without asserting a complete org total', () => {
-    const report = commandReportFixture();
-    report.listTruncated = true;
-    report.candidateVersionCount = 2000;
-    expectValidReport(report);
-    expect(report).not.to.have.property('totalVersions');
   });
 });

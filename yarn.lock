@@ -1528,9 +1528,9 @@
     typescript "^6.0.0"
     wireit "^0.14.13"
 
-"@salesforce/flow-node@git+https://github.com/forcedotcom/flows.git#bc144a134ed3b988b07e0e523299a4ec9270f8da":
+"@salesforce/flow-node@git+https://github.com/forcedotcom/flows.git#c11f2617a075eabcfa969467f8e0adaac25e5ff9":
   version "0.1.0"
-  resolved "git+https://github.com/forcedotcom/flows.git#bc144a134ed3b988b07e0e523299a4ec9270f8da"
+  resolved "git+https://github.com/forcedotcom/flows.git#c11f2617a075eabcfa969467f8e0adaac25e5ff9"
   dependencies:
     "@salesforce/core" "^9.4.1"
 

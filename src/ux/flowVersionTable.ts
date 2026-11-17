@@ -17,7 +17,7 @@
 import { stripVTControlCharacters } from 'node:util';
 import { Ux } from '@salesforce/sf-plugins-core';
 
-/** Presentation values for the fields required by C1, not an assessment or count provider. */
+/** Presentation values from the Core version-list report, not an assessment or count provider. */
 export type FlowVersionTableRow = {
   versionName: string;
   version: string;
@@ -26,7 +26,10 @@ export type FlowVersionTableRow = {
   creator: string;
   createdDate: string;
   lastModifiedDate: string;
-  references: string;
+  runInMode: string;
+  apiVersion: string;
+  capacityCategory: string;
+  metricsLoggedToDataCloud: string;
   paused: string;
   failed: string;
   deletable: 'Yes' | 'No' | 'Error';
@@ -41,7 +44,10 @@ const fields = [
   { key: 'creator', name: 'Created By', width: 22 },
   { key: 'createdDate', name: 'Created Date', width: 26 },
   { key: 'lastModifiedDate', name: 'Last Modified Date', width: 26 },
-  { key: 'references', name: 'Referenced By', width: 15 },
+  { key: 'runInMode', name: 'Run in Mode', width: 22 },
+  { key: 'apiVersion', name: 'Flow API Version', width: 18 },
+  { key: 'capacityCategory', name: 'Capacity Category', width: 20 },
+  { key: 'metricsLoggedToDataCloud', name: 'Log Metrics to Data Cloud', width: 28 },
   { key: 'paused', name: 'Paused Interviews', width: 19 },
   { key: 'failed', name: 'Failed Interviews', width: 19 },
   { key: 'deletable', name: 'Deletable', width: 11 },
@@ -56,7 +62,7 @@ const terminalWidth = (requestedWidth?: number): number => {
   return Number.isFinite(width) && width > 0 ? Math.max(24, Math.floor(width)) : 160;
 };
 
-/** Uses the standard Salesforce CLI renderer and wraps every cell rather than dropping C1 information. */
+/** Uses the standard Salesforce CLI renderer and wraps every cell rather than dropping version information. */
 export const formatFlowVersionTable = (rows: FlowVersionTableRow[], requestedWidth?: number): string => {
   if (rows.length === 0) return '';
   const width = terminalWidth(requestedWidth);
@@ -75,7 +81,7 @@ export const formatFlowVersionTable = (rows: FlowVersionTableRow[], requestedWid
       ux.makeTable({
         data: fields.map(({ key, name }) => ({ field: name, value: row[key] })),
         columns: [
-          { key: 'field', name: 'Field', width: Math.min(24, Math.floor(width / 2)), overflow: 'wrap' },
+          { key: 'field', name: 'Field', width: Math.min(30, Math.floor(width / 2)), overflow: 'wrap' },
           { key: 'value', name: 'Value', overflow: 'wrap' },
         ],
         maxWidth: width,

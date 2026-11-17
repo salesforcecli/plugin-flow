@@ -24,6 +24,8 @@ No approval flag appears in the live suite. Force cases use `--dry-run` and veri
 
 The job-report NUT is separately opt-in through `FLOW_VERSION_JOB_NUT_ID`, together with `FLOW_VERSION_JOB_NUT_TARGET_ORG` and optional `FLOW_VERSION_JOB_NUT_API_VERSION` (default 67.0). Supply an existing accessible job ID. These independent variables do not activate the Flow fixture suite. This case launches one read-only `flow version job report --json` command; finished jobs also read the BackgroundOperation Status, Result and Error fields. It validates the parsed per-version results and status without creating a job or requiring Flow/version fixture settings. Without a job ID the case is pending, even when the Flow fixture suite is configured. A failed or inaccessible lookup is a test failure, not a successful status result.
 
+The one-Flow list returns the API-named version fields, including ageDays, Setup version metadata, paused/failed/autosaved counts and the server savedInterviewCount. Console tests cover all 17 columns, INTERVIEWS (0), blank ERROR count cells and unchanged org summaries. The live list NUT checks those fields while an independent SDK observer verifies that no fixture version or definition changes.
+
 For local unit, type and lint checks:
 
 ```sh

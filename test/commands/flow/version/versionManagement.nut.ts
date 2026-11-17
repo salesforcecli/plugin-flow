@@ -21,7 +21,9 @@ import { fileURLToPath } from 'node:url';
 import Ajv from 'ajv';
 import { expect } from 'chai';
 import { Cache, execCmd, type JsonOutput } from '@salesforce/cli-plugins-testkit';
-import type { FlowVersionListCommandReport } from '../../../../src/commands/flow/version/list.js';
+import { Org } from '@salesforce/core';
+import { ConnectFlowVersionListClient, type ConnectFlowVersionListReport } from '@salesforce/flow-node';
+import type { FlowVersionListCommandResult } from '../../../../src/reporters/flowVersionListReport.js';
 import type { FlowVersionMutationReport } from '../../../../src/reporters/flowVersionMutationReport.js';
 import { flowVersionNutSettings, type FlowVersionNutSettings } from '../../../helpers/flowVersionNutSettings.js';
 
@@ -43,6 +45,7 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
   let priorPluginDir: string | undefined;
   let configured = false;
   let beforeIds: string[];
+  let observer: ConnectFlowVersionListClient;
   let definitionId: string;
   let selectedIds: Map<number, string>;
 
@@ -71,20 +74,35 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
     settings.flowApiName,
   ];
   const selection = (): string[] => settings.versions.flatMap((version) => ['--versions', String(version)]);
-  const list = (): FlowVersionListCommandReport => {
-    const envelope = execute<FlowVersionListCommandReport>(['flow', 'version', 'list', ...scope(), '--json']);
+  const list = (): FlowVersionListCommandResult => {
+    const envelope = execute<FlowVersionListCommandResult>(['flow', 'version', 'list', ...scope(), '--json']);
     expect(listSchema(envelope.result), 'C1 output must match its generated command schema').to.equal(true);
-    const result = envelope.result;
-    const rows = result.flows.flatMap((flow) => flow.versions);
-    const incomplete = result.listTruncated || rows.some((row) => row.outcome === 'ERROR');
-    expect(envelope.status).to.equal(incomplete ? (rows.some((row) => row.outcome !== 'ERROR') ? 68 : 1) : 0);
-    expect(result.listTruncated, 'use a dedicated fixture whose entire version catalog is readable').to.equal(false);
-    expect(result.flows).to.have.length(1);
-    expect(result.flows[0].apiName).to.equal(settings.flowApiName);
-    expect(result.flows[0].versions.length, 'the fixture must have at least one version').to.be.greaterThan(0);
-    return result;
+    expect(envelope.status).to.equal(0);
+    expect(envelope.result.flows).to.have.length(1);
+    expect(envelope.result.flows[0].flow).to.equal(settings.flowApiName);
+    expect(envelope.result.flows[0].versions!.length).to.be.greaterThan(0);
+    for (const version of envelope.result.flows[0].versions!) {
+      for (const key of [
+        'versionName',
+        'createdByName',
+        'ageDays',
+        'runInMode',
+        'apiVersion',
+        'capacityCategory',
+        'areMetricsLoggedToDataCloud',
+        'pausedInterviewCount',
+        'failedInterviewCount',
+        'autosavedInterviewCount',
+        'savedInterviewCount',
+        'reasonCode',
+        'message',
+      ])
+        expect(version).to.have.property(key);
+      for (const key of ['flowVersionName', 'createdBy', 'referenceCount']) expect(version).not.to.have.property(key);
+    }
+    return envelope.result;
   };
-  const identities = (report: FlowVersionListCommandReport): string[] =>
+  const identities = (report: ConnectFlowVersionListReport): string[] =>
     report.flows
       .flatMap((flow) =>
         flow.versions.map((version) => `${flow.definitionId}:${version.versionId}:${version.versionNumber}`)
@@ -118,7 +136,7 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
     }
   };
 
-  before(function () {
+  before(async function () {
     const selected = flowVersionNutSettings(process.env);
     if (!selected) {
       this.skip();
@@ -131,7 +149,10 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
     priorPluginDir = Cache.getInstance().get('pluginDir');
     Cache.getInstance().set('pluginDir', pluginRoot);
     configured = true;
-    const initial = list();
+    const org = await Org.create({ aliasOrUsername: settings.targetOrg });
+    observer = new ConnectFlowVersionListClient(org.getConnection(settings.apiVersion));
+    const initial = await observer.list({ flowName: settings.flowApiName });
+    expect(initial.catalogComplete).to.equal(true);
     beforeIds = identities(initial);
     definitionId = initial.flows[0].definitionId;
     selectedIds = new Map(initial.flows[0].versions.map((row) => [row.versionNumber, row.versionId]));
@@ -139,10 +160,10 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
       expect(selectedIds.has(version), 'each requested NUT version must exist in the dedicated fixture').to.equal(true);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     if (configured && beforeIds)
       expect(
-        identities(list()),
+        identities(await observer.list({ flowName: settings.flowApiName })),
         'read-only CLI commands must preserve every fixture version and definition ID'
       ).to.deep.equal(beforeIds);
   });
@@ -157,12 +178,13 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
 
   it('lists the dedicated Flow through the real compiled CLI', () => {
     const report = list();
-    expect(report.scope).to.include({ all: false, flowName: settings.flowApiName });
-    expect(identities(report)).to.deep.equal(beforeIds);
+    expect(report.flows[0].versions!.map((row) => row.versionNumber).sort((a, b) => a - b)).to.deep.equal(
+      beforeIds.map((identity) => Number(identity.split(':')[2])).sort((a, b) => a - b)
+    );
   });
 
   it('includes the dedicated Flow in the org-wide list without inventing eligibility', () => {
-    const envelope = execute<FlowVersionListCommandReport>([
+    const envelope = execute<FlowVersionListCommandResult>([
       'flow',
       'version',
       'list',
@@ -170,14 +192,14 @@ describe(`Flow version read-only live-org NUTs (${prerequisite})`, function () {
       settings.targetOrg,
       '--api-version',
       settings.apiVersion,
-      '--all',
       '--json',
     ]);
     expect(listSchema(envelope.result)).to.equal(true);
-    expect(envelope.result.scope.all).to.equal(true);
-    expect(envelope.result.flows.some((flow) => flow.definitionId === definitionId)).to.equal(true);
-    for (const row of envelope.result.flows.flatMap((flow) => flow.versions))
-      expect(row.deletable).to.equal(row.outcome === 'PASS');
+    expect(envelope.result.flows.some((flow) => flow.flow === settings.flowApiName)).to.equal(true);
+    for (const flow of envelope.result.flows) {
+      expect(flow).not.to.have.property('versions');
+      expect(flow.deletableCount === null || Number.isSafeInteger(flow.deletableCount)).to.equal(true);
+    }
   });
 
   it('assesses repeated selected versions with explicit dry-run and preserves their exact IDs', () => {
